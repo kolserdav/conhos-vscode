@@ -19,6 +19,17 @@
       "command": "extension.checkTemplate",
       "title": "Check Template Fields"
     }],
+    "configuration": {
+            "type": "object",
+            "title": "YAML Template Checker",
+            "properties": {
+                "yamlTemplateChecker.requiredFields": {
+                    "type": "array",
+                    "default": ["field1", "field2", "field3"],
+                    "description": "List of required fields in the YAML template."
+                }
+            }
+        },
     "languages": [
       {
         "id": "yaml",
