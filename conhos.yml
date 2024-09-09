@@ -8,9 +8,9 @@ services:
       url: https://github.com/kolserdav/conhos-test-git.git
       branch: master
       untracked: checkout
-    version: latest 
+    version: latest
     pwd: ./hello-world
-    ports
+    ports:
       - port: 3000
         type: http
     command: npm i && npm run start

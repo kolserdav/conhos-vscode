@@ -11,6 +11,9 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parse } from './utils/yaml';
+import { checkConfig } from './interfaces';
+import log from './utils/log';
+import { getMedialplan } from './utils/request';
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -86,38 +89,48 @@ connection.onDidChangeWatchedFiles((_change) => {
 });
 
 const validFields = ['field1', 'field2', 'field3'];
-documents.onDidChangeContent((change) => {
+documents.onDidChangeContent(async (change) => {
   const diagnostics: Diagnostic[] = [];
   const document = documents.get(change.document.uri);
   if (!document) {
+    log('warn', 'Document is missing', document);
     return;
   }
   const text = document.getText();
   const { data, error } = parse(text);
-  if (error) {
+
+  if (error || !data) {
     diagnostics.push({
       severity: DiagnosticSeverity.Error,
       range: {
         start: { line: 0, character: 0 },
         end: { line: 0, character: 0 },
       },
-      message: `Failed to parsing YAML: ${error.message}`,
+      message: `Failed to parsing YAML: ${error?.message}`,
       source: 'my-lsp',
     });
+    return;
   }
 
-  for (const key in parsed) {
-    if (!validFields.includes(key)) {
-      diagnostics.push({
-        severity: DiagnosticSeverity.Error,
-        range: {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 0 },
-        },
-        message: `Неизвестное поле: ${key}`,
-        source: 'my-lsp',
-      });
-    }
+  const deployData = await getMedialplan();
+  if (!deployData) {
+    log('warn', 'Mediaplan is missing');
+    return;
+  }
+
+  const checkResult = await checkConfig(data, { deployData, isServer: true });
+
+  for (let i = 0; checkResult[i]; i++) {
+    const { exit, msg, data } = checkResult[i];
+    diagnostics.push({
+      severity: exit ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+      range: {
+        start: { line: 1, character: 1 },
+        end: { line: 1, character: 1 },
+      },
+      message: `${msg}${data}`,
+      source: 'my-lsp',
+    });
   }
 
   connection.sendDiagnostics({ uri: change.document.uri, diagnostics });

@@ -1,6 +1,7 @@
 import { tmpdir } from 'os';
 import type { default as FS } from 'fs';
 import { basename, isAbsolute, resolve } from 'path';
+import { CacheItem } from 'cache-changed';
 
 export type ServiceTypeCustom = 'node' | 'rust' | 'python' | 'golang' | 'php';
 
@@ -95,7 +96,7 @@ export type ProxyPaths = Record<string, string>;
 
 export type Volumes = Record<string, string[]>;
 
-let fs = null;
+let fs: typeof FS | null = null;
 
 export const ERROR_LOG_PREFIX = 'error:';
 
@@ -117,10 +118,7 @@ export const ENVIRONMENT_SWITCH = {
   },
 };
 
-/**
- * @type {Record<ServiceTypeCommon, string[]>}
- */
-export const ENVIRONMENT_REQUIRED_COMMON = {
+export const ENVIRONMENT_REQUIRED_COMMON: Record<ServiceTypeCommon, string[]> = {
   redis: [ENVIRONMENT_SWITCH.redis.password],
   postgres: ['POSTGRES_PASSWORD', 'POSTGRES_USER', 'POSTGRES_DB'],
   adminer: [],
@@ -143,19 +141,9 @@ export const ENVIRONMENT_REQUIRED_COMMON = {
   ],
 };
 
-export function as<T>(data: any): T {
-  return data;
-}
+export const SERVICES_CUSTOM: ServiceTypeCustom[] = ['node', 'rust', 'python', 'golang', 'php'];
 
-/**
- * @type {ServiceTypeCustom[]}
- */
-export const SERVICES_CUSTOM = ['node', 'rust', 'python', 'golang', 'php'];
-
-/**
- * @type {ServiceTypeCommon[]}
- */
-export const SERVICES_COMMON = [
+export const SERVICES_COMMON: ServiceTypeCommon[] = [
   'redis',
   'postgres',
   'mysql',
@@ -168,87 +156,46 @@ export const SERVICES_COMMON = [
   'mongo_express',
 ];
 
-/**
- * @type {ServiceTypeCommonPublic[]}
- */
-export const SERVICES_COMMON_PUBLIC = ['adminer', 'phpmyadmin', 'pgadmin', 'mongo_express'];
+export const SERVICES_COMMON_PUBLIC: ServiceTypeCommonPublic[] = [
+  'adminer',
+  'phpmyadmin',
+  'pgadmin',
+  'mongo_express',
+];
 
-/**
- * @type {any[]}
- */
-const _SERVICES_COMMON = SERVICES_COMMON;
+const SERVICE_TYPES: ServiceType[] = (SERVICES_COMMON as any[]).concat(SERVICES_CUSTOM);
 
-/**
- * @type {ServiceType[]}
- */
-const SERVICE_TYPES = _SERVICES_COMMON.concat(SERVICES_CUSTOM);
+export interface DeployData {
+  services: {
+    type: ServiceType;
+    name: string;
+    images: string;
+    tags: string[];
+    hub: string;
+  }[];
+  sizes: {
+    name: string;
+    memory: {
+      name: string;
+      value: number;
+    };
+    cpus: number;
+    storage: string;
+    ports: number;
+  }[];
+  baseValue: number;
+  baseCost: number;
+}
 
-/**
- * @typedef {{
- *  services: {
- *    type: ServiceType;
- *    name: string;
- *    images: string;
- *    tags: string[]
- *    hub: string;
- * }[];
- *  sizes: {
- *    name: string;
- *    memory: {
- *     name: string;
- *     value: number;
- *    };
- *    cpus: number;
- *    storage: string;
- *    ports: number;
- *  }[];
- *  baseValue: number;
- *  baseCost: number;
- * }} DeployData
- * @typedef {'http' | 'ws' | 'chunked' | 'php'} PortType
- * @typedef { 'pico' | 'nano' | 'micro' | 'mili' | 'santi' | 'deci' |
- *  'deca' | 'hecto' | 'kilo' } ServiceSize
- * @typedef {{
- *  port: number;
- *  type: PortType;
- *  location?: string;
- *  timeout?: string;
- *  buffer_size?: string;
- *  proxy_path?: string;
- *  static?: {
- *    location: string;
- *    path: string;
- *    index?: string;
- *  }[]
- * }} Port
- * @typedef {{
- *  serviceName: string;
- *  domains: Domains;
- *  serviceType: ServiceType;
- *  serviceId: string | null;
- * }} NewDomains
- * @typedef {'github' | 'gitlab'} GitType
- * @typedef {'checkout' | 'push' | 'merge'} GitUntrackedPolicy
- * @typedef {{
- *  url: string;
- *  branch: string;
- *  untracked?: GitUntrackedPolicy
- * }} Git
- */
-
-/**
- * @type {Record<GitUntrackedPolicy, GitUntrackedPolicy>}
- */
-export const GIT_UNTRACKED_POLICY = {
+export const GIT_UNTRACKED_POLICY: Record<GitUntrackedPolicy, GitUntrackedPolicy> = {
   merge: 'merge',
   checkout: 'checkout',
   push: 'push',
 };
 
-/**
- * @type {GitType[]}
- */
-export const GIT_TYPES = ['github', 'gitlab'];
+export type GitType = 'github' | 'gitlab';
+
+export const GIT_TYPES: GitType[] = ['github', 'gitlab'];
 
 const DEFAULT_WS_ADDRESS = 'wss://ws.conhos.ru';
 export const WEBSOCKET_ADDRESS = process.env.WEBSOCKET_ADDRESS || DEFAULT_WS_ADDRESS;
@@ -269,196 +216,159 @@ export const UPLOAD_REQUEST_TIMEOUT = 1000 * 60 * 20 * 100;
 export const LOGS_REQUEST_TIMEOUT = 1000 * 60 * 20 * 100;
 export const REGEXP_IS_DOMAIN = /[a-zA-Z0-9\\-]+\.[a-zA-Z0-9]+$/;
 
-/**
- * @type {Port}
- */
-export const PORT_DEFAULT = {
+export const PORT_DEFAULT: Port = {
   port: 3000,
   type: 'http',
 };
 
-/**
- * @type {Record<PortType, PortType>}
- */
-const _PORT_TYPES = {
+const _PORT_TYPES: Record<PortType, PortType> = {
   http: 'http',
   php: 'php',
   chunked: 'chunked',
   ws: 'ws',
 };
 
-/**
- * @type {PortType[]}
- */
-export const PORT_TYPES = as(Object.keys(_PORT_TYPES));
+export const PORT_TYPES: PortType[] = Object.keys(_PORT_TYPES) as PortType[];
 
 /**
  * @typedef {'custom' | 'common'} ServiceKind
  */
 
 /**
- * @typedef {{
- *  name: string;
- *  server?: {
- *    node_name: string;
- *    api_key: string;
- *  }
- *  services: Record<string, {
- *    active: boolean;
- *    type: ServiceType;
- *    size: ServiceSize;
- *    version: string;
- *    no_restart?: boolean;
- *    pwd?: string;
- *    git?: Git;
- *    exclude?: string[]
- *    command?: string;
- *    ports?: Port[];
- *    volumes?: string[];
- *    depends_on?: string[];
- *    domains?: NewDomains['domains'],
- *    environment?: string[];
- *  }>
- * }} ConfigFile
- */
-
-/**
  * @typedef {{userId: string;}} Identity
  */
 
-/**
- * @typedef {'info' | 'warn' | 'error'} Status
- */
+export type Status = 'info' | 'warn' | 'error';
 
-/**
- * @typedef {{
- *  num: number;
- *  chunk: string | Buffer;
- * }} UploadFileBody
- */
+export interface UploadFileBody {
+  num: number;
+  chunk: string | Buffer;
+}
 
-/**
- * @typedef {object} WSMessageDataCli
- * @property {any} any
- * @property {{
- *  connId: string;
- *  deployData: DeployData;
- * }} setSocketCli
- * @property {{
- *  version: string;
- * }} setSocketServer
- * @property {string} loginCli
- * @property {string} loginServer
- * @property {{
- *  checked: boolean;
- *  skipSetProject: boolean;
- *  errMess?: string;
- * }} checkTokenCli
- * @property {{
- *  skipSetProject: boolean;
- * }} checkTokenServer
- * @property {{
- *  msg: string | number;
- *  end: boolean;
- * }} message
- * @property {{
- *  projectDeleted: boolean;
- *  config: ConfigFile;
- *  volumes: Volumes
- *  interractive: boolean;
- * }} prepareDeployServer
- * @property {{
- *  url: string;
- *  serviceName: string;
- * }} deployPrepareVolumeUploadCli
- * @property {{
- *  exclude: string[] | undefined;
- *  pwd: string;
- *  service: string;
- *  cache: CacheItem[];
- *  active: boolean;
- *  git?: Git;
- * }} prepareDeployCli
- * @property {{
- *  git: Git;
- *  pwd: string;
- *  service: string;
- *  last: boolean;
- *  active: boolean;
- * }} deployGitServer
- * @property {{
- *  service: string;
- *  last: boolean;
- * }} deployGitCli
- * @property {{
- *  service: string;
- *  skip: boolean;
- *  last: boolean; // last service
- *  latest: boolean; // latest file of service
- *  file: string;
- *  num: number;
- * }} deployEndServer
- * @property {{
- *  service: string;
- *  files: string[];
- *  cwd: string;
- *  last: boolean;
- *  pwd: string;
- * }} deployDeleteFilesServer
- * @property {{
- *  service: string;
- *  files: string[];
- *  cwd: string;
- *  last: boolean;
- *  url: string;
- *  pwd: string;
- * }} deployDeleteFilesCli
- * @property {{
- *  nodeName?: string;
- * }} getDeployData
- * @property {DeployData} deployData
- * @property {{
- *  watch: boolean;
- *  timestamps: boolean;
- *  project: string;
- *  serviceName: string;
- *  since: string | undefined;
- *  until: string | undefined;
- *  tail: number | undefined;
- *  clear: boolean;
- *  config: ConfigFile | null
- * }} getLogsServer
- * @property {{
- *  url: string;
- * } & WSMessageDataCli['getLogsServer']} getLogsCli
- * @property {{
- *  last: boolean;
- *  text: string;
- *  num: number;
- * }} logs
- *  @property {{
- *  project: string;
- * }} remove
- * @property {{
- *  containerName: string;
- *  serviceName: string;
- *  serviceType: ServiceTypeCommon;
- * }} acceptDeleteCli
- * @property {{
- *  containerName: string;
- *  accept: boolean;
- * }} acceptDeleteServer
- * @property {{
- *  project: string;
- * }} ipServer
- * @property {{
- *  ip: string;
- * }} ipCli
- */
+export interface WSMessageDataCli {
+  any: any;
+  setSocketCli: {
+    connId: string;
+    deployData: DeployData;
+  };
+  setSocketServer: {
+    version: string;
+  };
+  loginCli: string;
+  loginServer: string;
+  checkTokenCli: {
+    checked: boolean;
+    skipSetProject: boolean;
+    errMess?: string;
+  };
+  checkTokenServer: {
+    skipSetProject: boolean;
+  };
+  message: {
+    msg: string | number;
+    end: boolean;
+  };
+  prepareDeployServer: {
+    projectDeleted: boolean;
+    config: ConfigFile;
+    volumes: Volumes;
+    interractive: boolean;
+  };
+  deployPrepareVolumeUploadCli: {
+    url: string;
+    serviceName: string;
+  };
+  prepareDeployCli: {
+    exclude: string[] | undefined;
+    pwd: string;
+    service: string;
+    cache: CacheItem[];
+    active: boolean;
+    git?: Git;
+  };
+  deployGitServer: {
+    git: Git;
+    pwd: string;
+    service: string;
+    last: boolean;
+    active: boolean;
+  };
+  deployGitCli: {
+    service: string;
+    last: boolean;
+  };
+  deployEndServer: {
+    service: string;
+    skip: boolean;
+    last: boolean;
+    latest: boolean;
+    file: string;
+    num: number;
+  };
+  deployDeleteFilesServer: {
+    service: string;
+    files: string[];
+    cwd: string;
+    last: boolean;
+    pwd: string;
+  };
+  deployDeleteFilesCli: {
+    service: string;
+    files: string[];
+    cwd: string;
+    last: boolean;
+    url: string;
+    pwd: string;
+  };
+  getDeployData: {
+    nodeName?: string;
+  };
+  deployData: DeployData;
+  getLogsServer: {
+    watch: boolean;
+    timestamps: boolean;
+    project: string;
+    serviceName: string;
+    since: string | undefined;
+    until: string | undefined;
+    tail: number | undefined;
+    clear: boolean;
+    config: ConfigFile | null;
+  };
+  getLogsCli: {
+    url: string;
+  } & WSMessageDataCli['getLogsServer'];
+  logs: {
+    last: boolean;
+    text: string;
+    num: number;
+  };
+  remove: {
+    project: string;
+  };
+  acceptDeleteCli: {
+    containerName: string;
+    serviceName: string;
+    serviceType: ServiceTypeCommon;
+  };
+  acceptDeleteServer: {
+    containerName: string;
+    accept: boolean;
+  };
+  ipServer: {
+    project: string;
+  };
+  ipCli: {
+    ip: string;
+  };
+}
 
 interface CheckConfigResult {
   msg: string;
   data: string;
+  lineNumber: number;
+  columnStart: number;
+  columnEnd: number;
   exit: boolean;
 }
 
@@ -476,16 +386,25 @@ interface CheckConfigResult {
  * }} WSMessageCli
  */
 
+export interface WSMessageCli<T extends keyof WSMessageDataCli> {
+  status: Status;
+  type: T;
+  packageName: string;
+  message: string;
+  userId: string;
+  data: WSMessageDataCli[T];
+  token: string | null;
+  connId: string;
+}
+
 export const PROTOCOL_CLI = 'cli';
 export const PORT_MAX = 65535;
 export const DOMAIN_MAX_LENGTH = 77;
 
-/**
- *
- * @param {ServiceSize} serviceSize
- * @param {Omit<WSMessageDataCli['deployData'], 'services' | 'nodePublic'>} options
- */
-export function computeCostService(serviceSize, { sizes, baseCost, baseValue }) {
+export function computeCostService(
+  serviceSize: ServiceSize,
+  { sizes, baseCost, baseValue }: Omit<WSMessageDataCli['deployData'], 'services' | 'nodePublic'>
+) {
   const SHIFT_PRICE_COEFF = 1.3;
   const index = sizes.findIndex((item) => item.name === serviceSize);
   const currValueItem = sizes.find((item) => item.name === serviceSize);
@@ -507,18 +426,13 @@ export function computeCostService(serviceSize, { sizes, baseCost, baseValue }) 
   return { month, hour, minute };
 }
 
-/**
- * @typedef {Omit<ConfigFile, 'services'> & {
- *  services: Record<string, ConfigFile['services'][0] & { serviceId: string }>}
- * } ConfigFileBackend
- */
+export type ConfigFileBackend = Omit<ConfigFile, 'services'> & {
+  services: Record<string, ConfigFile['services'][0] & { serviceId: string }>;
+};
 
-/**
- * @template T
- * @param {string} msg
- * @returns {WSMessageCli<T> | null}
- */
-export function parseMessageCli(msg) {
+export function parseMessageCli<T extends keyof WSMessageDataCli>(
+  msg: string
+): WSMessageCli<T> | null {
   let data = null;
   try {
     data = JSON.parse(msg);
@@ -528,36 +442,21 @@ export function parseMessageCli(msg) {
   return data;
 }
 
-/**
- * @param {ServiceType} type
- * @returns {ServiceTypeCustom | null}
- */
-export const isCustomService = (type) => {
+export const isCustomService = (type: ServiceType): ServiceTypeCustom | null => {
   const res = SERVICES_CUSTOM.findIndex((item) => item === type);
-  return res === -1 ? null : /** @type {typeof as<ServiceTypeCustom>} */ as(type);
+  return res === -1 ? null : (type as ServiceTypeCustom);
 };
 
-/**
- * @param {ServiceType} type
- * @returns {ServiceTypeCommon | null}
- */
-export const isCommonService = (type) => {
-  const _type = /** @type {typeof as<ServiceTypeCommon>} */ as(type);
+export const isCommonService = (type: ServiceType): ServiceTypeCommon | null => {
+  const _type = type as ServiceTypeCommon;
   if (SERVICES_COMMON.findIndex((item) => item === _type) !== -1) {
     return _type;
   }
   return null;
 };
 
-/**
- * @param {string} item
- * @returns {string | null}
- */
-const getEnvironmentValue = (item) => {
-  /**
-   * @type {string | null}
-   */
-  let res = null;
+const getEnvironmentValue = (item: string): string | null => {
+  let res: string | null = null;
   const nameReg = /^[A-Za-z0-9_]+=/;
   if (nameReg.test(item)) {
     res = item.replace(nameReg, '');
@@ -565,15 +464,8 @@ const getEnvironmentValue = (item) => {
   return res;
 };
 
-/**
- * @param {string} name
- * @returns {string | null}
- */
-const getEnvironmentName = (name) => {
-  /**
-   * @type {string | null}
-   */
-  let res = null;
+const getEnvironmentName = (name: string): string | null => {
+  let res: string | null = null;
   const nameReg = /^[A-Za-z0-9_]+=/;
   if (nameReg.test(name)) {
     res = name.replace(/=.*/, '');
@@ -581,16 +473,8 @@ const getEnvironmentName = (name) => {
   return res;
 };
 
-/**
- * @param {string[]} environment
- * @param {string} name
- * @returns {string | null}
- */
-export const findEnvironmentValue = (environment, name) => {
-  /**
-   * @type {string | null}
-   */
-  let res = null;
+export const findEnvironmentValue = (environment: string[], name: string): string | null => {
+  let res: string | null = null;
   environment.forEach((item) => {
     const _name = getEnvironmentName(item);
     if (_name === name) {
@@ -600,18 +484,12 @@ export const findEnvironmentValue = (environment, name) => {
   return res;
 };
 
-/**
- *
- * @param {Record<string, string | null>} record
- * @param {string} name
- * @returns
- */
-export const checkRecord = (record, name) => {
+export const checkRecord = (record: Record<string, string | null>, name: string): boolean => {
   let check = false;
   const keys = Object.keys(record);
   keys.forEach((t) => {
     if (name) {
-      if (record[/** @type {typeof as<ServiceType>} */ as(t)] === name) {
+      if (record[t] === name) {
         check = true;
       }
     }
@@ -619,14 +497,12 @@ export const checkRecord = (record, name) => {
   return check;
 };
 
-/**
- * @param {string} variable
- * @returns {{
- *  name: string;
- *  value: string;
- * } | null}
- */
-export const parseEnvironmentVariable = (variable) => {
+export const parseEnvironmentVariable = (
+  variable: string
+): {
+  name: string;
+  value: string;
+} | null => {
   const name = getEnvironmentName(variable);
   const value = getEnvironmentValue(variable);
   if (!name || !value) {
@@ -638,57 +514,43 @@ export const parseEnvironmentVariable = (variable) => {
   };
 };
 
-/**
- * @param {string} name
- * @returns {boolean}
- */
-export const checkEnvironmentRequired = (name) => {
+export const checkEnvironmentRequired = (name: string): boolean => {
   let check = false;
   Object.keys(ENVIRONMENT_REQUIRED_COMMON).forEach((item) => {
-    ENVIRONMENT_REQUIRED_COMMON[/** @type {typeof as<ServiceTypeCommon>} */ as(item)].forEach(
-      (_item) => {
-        if (_item === name) {
-          check = true;
-        }
+    ENVIRONMENT_REQUIRED_COMMON[item as ServiceTypeCommon].forEach((_item) => {
+      if (_item === name) {
+        check = true;
       }
-    );
+    });
   });
   return check;
 };
 
-/**
- * @param {ServiceType} type
- * @returns {null | ServiceTypeCommonPublic}
- */
-export const isCommonServicePublic = (type) => {
+export const isCommonServicePublic = (type: ServiceType): null | ServiceTypeCommonPublic => {
   const index = SERVICES_COMMON_PUBLIC.findIndex((item) => item === type);
   const check = index !== -1;
   if (check) {
-    return /** @type {typeof as<ServiceTypeCommonPublic>} */ as(type);
+    return type as ServiceTypeCommonPublic;
   }
   return null;
 };
 
 const PORT_TIMEOUTS = ['ms', 's', 'm', 'h', 'd', 'w', 'M', 'y'];
 
-/**
- * @param {DeployData['sizes']} sizes
- * @param {ServiceSize} size
- */
-export const getServiceBySize = (sizes, size) => sizes.find(({ name }) => name === size);
+export const getServiceBySize = (sizes: DeployData['sizes'], size: ServiceSize) =>
+  sizes.find(({ name }) => name === size);
 
 const DEFAULT_LOCATION = '/';
 
-/**
- *
- * @param {{
- *  services: DeployData['services'];
- *  version: string;
- *  type: ServiceType;
- * }} param0
- * @returns {boolean}
- */
-function checkVersion({ services, version, type }) {
+function checkVersion({
+  services,
+  version,
+  type,
+}: {
+  services: DeployData['services'];
+  version: string;
+  type: ServiceType;
+}): boolean {
   const service = services.find(({ type: _type }) => _type === type);
   if (!service) {
     return false;
@@ -698,10 +560,7 @@ function checkVersion({ services, version, type }) {
 }
 
 function checkLocation(location: string, item: string, name = 'Location'): CheckConfigResult[] {
-  /**
-   * @type {CheckConfigResult[]}
-   */
-  const res = [];
+  const res: CheckConfigResult[] = [];
   const allowedRegexp = /^[\\//0-9A-Za-z\\-_/]+$/;
   if (!allowedRegexp.test(location)) {
     res.push({
@@ -736,12 +595,9 @@ export const VOLUME_UPLOAD_MAX_SIZE = 100000;
 
 export async function checkConfig(
   { services, server }: ConfigFile,
-  { deployData, isServer }: { deployData: DeployData | null; isServer: boolean }
+  { deployData, isServer }: { deployData: DeployData; isServer: boolean }
 ): Promise<CheckConfigResult[]> {
-  /**
-   * @type {CheckConfigResult[]}
-   */
-  let res = [];
+  let res: CheckConfigResult[] = [];
 
   if (!deployData) {
     res.push({
@@ -924,9 +780,9 @@ export async function checkConfig(
       if (isCommonService(type) && !isCommonServicePublic(type)) {
         res.push({
           msg: `Service "${item}" can not have public ports`,
-          data: `Only services can have public ports: [${SERVICES_CUSTOM.concat(
-            /** @type {typeof as<typeof SERVICES_CUSTOM>} */ as(SERVICES_COMMON_PUBLIC)
-          ).join('|')}]`,
+          data: `Only services can have public ports: [${(SERVICES_CUSTOM as any[])
+            .concat(SERVICES_COMMON_PUBLIC)
+            .join('|')}]`,
           exit: true,
         });
       }
@@ -1043,6 +899,14 @@ export async function checkConfig(
       }
 
       // Check ports
+      if (!Array.isArray(ports)) {
+        res.push({
+          msg: `Ports must be array in service "${item}"`,
+          data: '',
+          exit: true,
+        });
+        return res;
+      }
       const portsLength = (ports || []).length;
       const service = getServiceBySize(sizes, size);
       if (service) {
@@ -1121,6 +985,14 @@ export async function checkConfig(
             }
           }
           // Check port
+          if (!port) {
+            res.push({
+              msg: `Port "${port}" of service "${item}" is missing`,
+              data: '',
+              exit: true,
+            });
+            return res;
+          }
           if (Number.isNaN(parseInt(port.toString(), 10)) || /\./.test(port.toString())) {
             res.push({
               msg: `Port "${port}" of service "${item}" must be an integer`,
@@ -1286,7 +1158,11 @@ export async function checkConfig(
           }
           return true;
         });
-        if (!checkDeps && !_public && SERVICES_COMMON_PUBLIC.indexOf(as(type)) === -1) {
+        if (
+          !checkDeps &&
+          !_public &&
+          SERVICES_COMMON_PUBLIC.indexOf(type as ServiceTypeCommonPublic) === -1
+        ) {
           res.push({
             msg: `You have ${type} service with name "${item}", but none custom service depends on it`,
             data: `Add "depends_on" field with item "${item}" to any custom service`,
@@ -1294,8 +1170,7 @@ export async function checkConfig(
           });
         }
 
-        const commonVaribles =
-          ENVIRONMENT_REQUIRED_COMMON[/** @type {typeof as<ServiceTypeCommon>} */ as(type)];
+        const commonVaribles = ENVIRONMENT_REQUIRED_COMMON[type as ServiceTypeCommon];
 
         commonVaribles.forEach((_item) => {
           const check = (environment || []).find((__item) => {
@@ -1385,4 +1260,224 @@ export async function checkConfig(
     }
     return 1;
   });
+}
+
+export function checkGitType(url: string): GitType | null {
+  let res: GitType | null = null;
+  if (/https:\/\/github.com/.test(url)) {
+    res = 'github';
+  }
+  if (/https:\/\/gitlab.com/.test(url)) {
+    res = 'gitlab';
+  }
+  return res;
+}
+
+export function cleanGitPostfix(url: string) {
+  return url.replace(/\.git/, '');
+}
+
+interface ParsedGitRepo {
+  user: string;
+  project: string;
+}
+
+export function parseGitUrl(url: string): ParsedGitRepo | null {
+  const res: ParsedGitRepo | null = null;
+  let _url = cleanGitPostfix(url);
+
+  const lastPathReg = /\/[a-zA-Z0-9_-]+$/;
+  const repoM = _url.match(lastPathReg);
+  if (!repoM) {
+    return res;
+  }
+  _url = _url.replace(lastPathReg, '');
+  const userM = _url.match(lastPathReg);
+  if (!userM) {
+    return res;
+  }
+
+  return {
+    user: userM[0].replace(/^\//, ''),
+    project: repoM[0].replace(/^\//, ''),
+  };
+}
+
+export function clearRelPath(url: string) {
+  return url.replace(/^\.\//, '');
+}
+
+async function getFile({ url, maxSize }: { url: string; maxSize: number }): Promise<string> {
+  return new Promise((_resolve, reject) => {
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          return reject(new Error(`HTTP error! status: ${response.status}`));
+        }
+
+        let totalBytes = 0;
+        const chunks: string[] = [];
+        const decoder = new TextDecoder();
+        const { body } = response;
+
+        if (!body) {
+          reject(new Error('Response body is unused'));
+          return;
+        }
+
+        const reader = body.getReader();
+
+        const readStream = () => {
+          reader
+            .read()
+            .then(({ done, value }) => {
+              if (done) {
+                const finalString = chunks.join('') + decoder.decode();
+                return _resolve(finalString);
+              }
+
+              totalBytes += value.length;
+              if (totalBytes > maxSize) {
+                return reject(
+                  new Error(`Response size exceeds the maximum limit of ${maxSize} bytes`)
+                );
+              }
+              chunks.push(decoder.decode(value, { stream: true }));
+              readStream();
+            })
+            .catch(reject);
+        };
+        readStream();
+      })
+      .catch(reject);
+  });
+}
+
+export async function changeConfigFileVolumes(
+  { config, userId }: { config: ConfigFile; userId: string },
+  volumes: Volumes | undefined = undefined
+): Promise<{ config: ConfigFile; volumes: Volumes | undefined; error: string | null }> {
+  const _volumes: Volumes = {};
+  const _config = structuredClone(config);
+  const { services, name } = config;
+
+  if (!name) {
+    return {
+      config,
+      volumes,
+      error: 'Project name is missing in config',
+    };
+  }
+
+  if (!services) {
+    return {
+      config,
+      volumes,
+      error: 'Field services is missing in config',
+    };
+  }
+
+  const serviceKeys = Object.keys(services);
+  let error: string | null = null;
+  if (!volumes) {
+    if (!userId) {
+      return {
+        config,
+        volumes,
+        error: 'User id is missing in changeVolumes',
+      };
+    }
+    for (let i = 0; serviceKeys[i]; i++) {
+      if (error) {
+        break;
+      }
+      const serviceKey = serviceKeys[i];
+      const { volumes: __volumes, active } = services[serviceKey];
+
+      if (!active) {
+        continue;
+      }
+
+      if (__volumes) {
+        _config.services[serviceKey].volumes = [];
+        _volumes[serviceKey] = [];
+        for (let _i = 0; __volumes[_i]; _i++) {
+          let volume = __volumes[_i];
+
+          const httpM = volume.match(/^https?:\/\//);
+          if (!httpM) {
+            _config.services[serviceKey].volumes?.push(volume);
+            continue;
+          }
+          const http = httpM[0];
+          volume = volume.replace(http, '');
+
+          const localM = volume.match(VOLUME_LOCAL_REGEX);
+          if (!localM) {
+            error = `Volume local in service "${serviceKey}" has wrong value '${volume}'`;
+            break;
+          }
+          const local = localM[0].replace(VOLUME_LOCAL_POSTFIX_REGEX, '');
+          const filenameReg = /\/?[a-zA-Z_0-9\-\\.]+$/;
+          const filenameM = local.match(filenameReg);
+          if (!filenameM) {
+            error = `Local value of volume '${volume}' has wrong filename in service "${serviceKey}"`;
+            break;
+          }
+          const filename = filenameM[0].replace(/^\//, '');
+          const remoteM = volume.match(VOLUME_REMOTE_REGEX);
+          if (!remoteM) {
+            error = `Volume remote in service "${serviceKey}" has wrong value '${volume}'`;
+            break;
+          }
+          const remote = remoteM[0].replace(VOLUME_REMOTE_PREFIX_REGEX, '');
+
+          const file = await getFile({
+            url: `${http}${local}`,
+            maxSize: VOLUME_UPLOAD_MAX_SIZE,
+          }).catch((e) => {
+            error = e.message;
+          });
+          if (file === undefined) {
+            break;
+          }
+
+          const tmpFilePath = resolve(tmpdir(), `${userId}_${name}_${serviceKey}_${filename}`);
+          fs =
+            fs !== null
+              ? fs
+              : await new Promise((_resolve) => {
+                  if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
+                    import('fs').then((_fs) => {
+                      _resolve(_fs.default);
+                    });
+                  } else {
+                    _resolve(null);
+                  }
+                });
+          if (fs) {
+            fs.writeFileSync(tmpFilePath, file);
+          } else {
+            console.warn('FS is missing in changeConfigFileVolumes', '');
+          }
+          _config.services[serviceKey].volumes?.push(`${tmpFilePath}:${remote}`);
+          _volumes[serviceKey].push(`${http}${volume}`);
+        }
+      }
+    }
+  } else {
+    for (let i = 0; serviceKeys[i]; i++) {
+      if (error) {
+        break;
+      }
+      const serviceKey = serviceKeys[i];
+      const { volumes: sVolumes } = services[serviceKey];
+
+      if (sVolumes) {
+        _config.services[serviceKey].volumes = volumes[serviceKey];
+      }
+    }
+  }
+
+  return { config: _config, volumes: _volumes, error: null };
 }

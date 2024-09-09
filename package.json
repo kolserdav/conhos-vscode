@@ -4,6 +4,7 @@
   "description": "Highlights the syntax of the conhos.yml file",
   "version": "0.0.1",
   "main": "index.js",
+  "types": "src/interfaces.ts",
   "engines": {
     "vscode": "^1.50.0"
   },
@@ -74,6 +75,7 @@
     "webpack-dev-server": "^5.1.0"
   },
   "dependencies": {
+    "cache-changed": "^1.3.2",
     "rimraf": "^6.0.1",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
