@@ -10,7 +10,6 @@ import {
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log(2323);
   const serverModule = context.asAbsolutePath(path.join('dist', 'server.js'));
   let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
   let serverOptions: ServerOptions = {
@@ -30,12 +29,11 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   client = new LanguageClient(
-    'myLanguageServer',
-    'My Language Server',
+    'conhosLanguageServer',
+    'Conhos Language Server',
     serverOptions,
     clientOptions
   );
-  console.log(232);
   client.start();
 }
 

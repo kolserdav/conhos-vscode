@@ -15,12 +15,13 @@ import { checkConfig } from './interfaces';
 import log from './utils/log';
 import { getMedialplan } from './utils/request';
 
+const source = 'conhos';
+
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 let hasConfigurationCapability: boolean = false;
 let hasWorkspaceFolderCapability: boolean = false;
-let hasDiagnosticRelatedInformationCapability: boolean = false;
 
 connection.onInitialize((params: InitializeParams) => {
   let capabilities = params.capabilities;
@@ -31,19 +32,10 @@ connection.onInitialize((params: InitializeParams) => {
   hasWorkspaceFolderCapability = !!(
     capabilities.workspace && !!capabilities.workspace.workspaceFolders
   );
-  hasDiagnosticRelatedInformationCapability = !!(
-    capabilities.textDocument &&
-    capabilities.textDocument.publishDiagnostics &&
-    capabilities.textDocument.publishDiagnostics.relatedInformation
-  );
 
   const result: InitializeResult = {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
-      // Tell the client that this server supports code completion.
-      completionProvider: {
-        resolveProvider: true,
-      },
     },
   };
   if (hasWorkspaceFolderCapability) {
@@ -73,7 +65,6 @@ interface ExampleSettings {
 }
 
 const defaultSettings: ExampleSettings = { maxNumberOfProblems: 1000 };
-let globalSettings: ExampleSettings = defaultSettings;
 
 // Cache the settings of all open documents
 let documentSettings: Map<string, Thenable<ExampleSettings>> = new Map();
@@ -88,7 +79,6 @@ connection.onDidChangeWatchedFiles((_change) => {
   connection.console.log('We received a file change event');
 });
 
-const validFields = ['field1', 'field2', 'field3'];
 documents.onDidChangeContent(async (change) => {
   const diagnostics: Diagnostic[] = [];
   const document = documents.get(change.document.uri);
@@ -96,40 +86,54 @@ documents.onDidChangeContent(async (change) => {
     log('warn', 'Document is missing', document);
     return;
   }
-  const text = document.getText();
-  const { data, error } = parse(text);
-
-  if (error || !data) {
+  const configText = document.getText();
+  const { data: config, error } = parse(configText);
+  if (error || !config) {
     diagnostics.push({
       severity: DiagnosticSeverity.Error,
       range: {
-        start: { line: 0, character: 0 },
-        end: { line: 0, character: 0 },
+        start: { line: 0, character: 1 },
+        end: { line: 0, character: 1 },
       },
       message: `Failed to parsing YAML: ${error?.message}`,
-      source: 'my-lsp',
+      source,
     });
+    connection.sendDiagnostics({ uri: change.document.uri, diagnostics });
     return;
   }
 
   const deployData = await getMedialplan();
   if (!deployData) {
-    log('warn', 'Mediaplan is missing');
+    diagnostics.push({
+      severity: DiagnosticSeverity.Error,
+      range: {
+        start: { line: 0, character: 1 },
+        end: { line: 0, character: 1 },
+      },
+      message: 'Failed to conect to server. Try again later.',
+      source,
+    });
+    connection.sendDiagnostics({ uri: change.document.uri, diagnostics });
     return;
   }
 
-  const checkResult = await checkConfig(data, { deployData, isServer: true });
+  const checkResult = await checkConfig({ config, configText }, { deployData, isServer: true });
 
   for (let i = 0; checkResult[i]; i++) {
-    const { exit, msg, data } = checkResult[i];
+    const {
+      exit,
+      msg,
+      data,
+      position: { lineEnd, lineStart, columnEnd, columnStart },
+    } = checkResult[i];
     diagnostics.push({
       severity: exit ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
       range: {
-        start: { line: 1, character: 1 },
-        end: { line: 1, character: 1 },
+        start: { line: lineStart, character: columnStart },
+        end: { line: lineEnd, character: columnEnd },
       },
-      message: `${msg}${data}`,
-      source: 'my-lsp',
+      message: `${msg} (${data})`,
+      source,
     });
   }
 

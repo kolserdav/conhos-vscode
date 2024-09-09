@@ -75,7 +75,7 @@ export interface ConfigFile {
     string,
     {
       active: boolean;
-      type: ServiceType;
+      image: ServiceType;
       size: ServiceSize;
       version: string;
       no_restart?: boolean;
@@ -230,14 +230,6 @@ const _PORT_TYPES: Record<PortType, PortType> = {
 
 export const PORT_TYPES: PortType[] = Object.keys(_PORT_TYPES) as PortType[];
 
-/**
- * @typedef {'custom' | 'common'} ServiceKind
- */
-
-/**
- * @typedef {{userId: string;}} Identity
- */
-
 export type Status = 'info' | 'warn' | 'error';
 
 export interface UploadFileBody {
@@ -366,25 +358,14 @@ export interface WSMessageDataCli {
 interface CheckConfigResult {
   msg: string;
   data: string;
-  lineNumber: number;
-  columnStart: number;
-  columnEnd: number;
   exit: boolean;
+  position: {
+    lineStart: number;
+    lineEnd: number;
+    columnStart: number;
+    columnEnd: number;
+  };
 }
-
-/**
- * @template {keyof WSMessageDataCli} T
- * @typedef {{
- *  status: Status;
- *  type: T;
- *  packageName: string;
- *  message: string;
- *  userId: string;
- *  data: WSMessageDataCli[T];
- *  token: string | null;
- *  connId: string;
- * }} WSMessageCli
- */
 
 export interface WSMessageCli<T extends keyof WSMessageDataCli> {
   status: Status;
@@ -559,29 +540,295 @@ function checkVersion({
   return tags.indexOf(version) !== -1;
 }
 
-function checkLocation(location: string, item: string, name = 'Location'): CheckConfigResult[] {
+interface GetServicePosition<
+  T extends keyof ConfigFile['services'][0],
+  D extends ConfigFile['services'][0][T],
+> {
+  name: string;
+  property: T | null;
+  value: D extends Array<infer U> ? Partial<U> : Partial<D> | null;
+}
+
+const CHECK_CONFIG_RESULT_DEFAULT: CheckConfigResult['position'] = {
+  lineStart: 1,
+  lineEnd: 1,
+  columnStart: 1,
+  columnEnd: 1,
+};
+
+function createPropertyRegex(property: string) {
+  return new RegExp(`^\\s+${property}:`);
+}
+
+function getColumnStart(propertyM: RegExpMatchArray, property: string): number {
+  return propertyM[0].length - property.length - 1;
+}
+
+function getServicePosition<
+  T extends keyof ConfigFile['services'][0],
+  D extends ConfigFile['services'][0][T],
+>({
+  configText,
+  config,
+  service,
+}: {
+  configText: string;
+  config: ConfigFile;
+  service: GetServicePosition<T, D>;
+}): CheckConfigResult['position'] {
+  let result = structuredClone(CHECK_CONFIG_RESULT_DEFAULT);
+  const { services } = config;
+  const { name, property, value } = service;
+  const lines = configText.split('\n');
+
+  let serviceIndex = 0;
+  let propertyIndex = 0;
+  Object.keys(services).every((item, index) => {
+    if (item === name) {
+      lines.every((line, lineNumber) => {
+        const propertyM = line.match(createPropertyRegex(name));
+        if (propertyM) {
+          const columnStart = getColumnStart(propertyM, name);
+          result = {
+            lineStart: lineNumber,
+            lineEnd: lineNumber,
+            columnStart,
+            columnEnd: propertyM[0].length,
+          };
+          return false;
+        }
+        return true;
+      });
+
+      // Set serviceIndex adn prooertyIndex
+      Object.keys(services[item]).every((_value) => {
+        if (property === _value) {
+          serviceIndex = index;
+          if (
+            // @ts-ignore
+            typeof services[item][_value] === 'object' &&
+            typeof value === 'object' &&
+            value !== null
+          ) {
+            Object.keys(services[item][_value as keyof ConfigFile['services'][0]] || {}).forEach(
+              (propField: any, _index) => {
+                if (Number.isNaN(parseInt(propField, 10))) {
+                  if (
+                    // @ts-ignore
+                    value[propField] !== undefined
+                  ) {
+                    propertyIndex = serviceIndex;
+                  }
+                } else {
+                  if (
+                    // @ts-ignore
+                    services[item][_value as keyof ConfigFile['services'][0]][propField] !==
+                    undefined
+                  ) {
+                    propertyIndex = _index + serviceIndex;
+                  }
+                }
+              }
+            );
+          }
+
+          return false;
+        }
+        return true;
+      });
+      return false;
+    }
+    return true;
+  });
+
+  const valueLines: CheckConfigResult['position'][] = [];
+  const propLines: CheckConfigResult['position'][] = [];
+
+  lines.forEach((line, lineNumber) => {
+    if (property) {
+      const propertyM = line.match(createPropertyRegex(property));
+      if (propertyM) {
+        if (value === null) {
+          const columnStart = getColumnStart(propertyM, property);
+          valueLines.push({
+            lineStart: lineNumber,
+            lineEnd: lineNumber,
+            columnStart,
+            columnEnd: propertyM[0].length,
+          });
+        } else {
+          if (typeof services[name][property] === 'object') {
+            Object.keys(services[name][property]).forEach((propField) => {
+              if (Array.isArray(services[name][property])) {
+                services[name][property].forEach((obj) => {
+                  if (typeof obj === 'object') {
+                    Object.keys(obj).forEach((subField) => {
+                      // @ts-ignore
+                      if (value[subField] !== undefined) {
+                        // Again by lines
+                        lines.forEach((_line, _lineNumber) => {
+                          const propertyM = _line.match(createPropertyRegex(subField));
+                          if (propertyM) {
+                            const columnStart = getColumnStart(propertyM, subField);
+                            propLines.push({
+                              lineStart: _lineNumber,
+                              lineEnd: _lineNumber,
+                              columnStart,
+                              columnEnd: propertyM[0].length,
+                            });
+                          }
+                        });
+                      }
+                    });
+                  }
+                });
+              } else if (typeof services[name][property] === 'object') {
+                Object.keys(services[name][property]).forEach((subField) => {
+                  if (propField === subField) {
+                    lines.forEach((_line, _lineNumber) => {
+                      // @ts-ignore
+                      if (value[propField] !== undefined) {
+                        const propertyM = _line.match(createPropertyRegex(propField));
+                        if (propertyM) {
+                          const columnStart = getColumnStart(propertyM, propField);
+                          propLines.push({
+                            lineStart: _lineNumber,
+                            lineEnd: _lineNumber,
+                            columnStart,
+                            columnEnd: propertyM[0].length,
+                          });
+                        }
+                      }
+                    });
+                  }
+                });
+              }
+            });
+          } else {
+            lines.forEach((_line, _lineNumber) => {
+              const propertyM = _line.match(createPropertyRegex(property));
+              if (propertyM) {
+                const columnStart = getColumnStart(propertyM, property);
+                propLines.push({
+                  lineStart: _lineNumber,
+                  lineEnd: _lineNumber,
+                  columnStart,
+                  columnEnd: propertyM[0].length,
+                });
+              }
+            });
+          }
+        }
+      }
+    } else {
+      const propertyM = line.match(createPropertyRegex(name));
+      if (propertyM) {
+        const columnStart = getColumnStart(propertyM, name);
+        valueLines.push({
+          lineStart: lineNumber,
+          lineEnd: lineNumber,
+          columnStart,
+          columnEnd: propertyM[0].length,
+        });
+      }
+    }
+  });
+  console.log(1, propLines, propertyIndex);
+  return propLines[propertyIndex] || valueLines[serviceIndex] || result;
+}
+
+function getPosition<
+  T extends keyof ConfigFile,
+  K extends keyof ConfigFile['services'][0],
+  D extends ConfigFile['services'][0][K],
+>({
+  configText,
+  config,
+  field,
+  service,
+}: {
+  configText: string;
+  config: ConfigFile;
+  field: T | null;
+  service: T extends 'services' ? GetServicePosition<K, D> : null;
+}): CheckConfigResult['position'] {
+  let result = structuredClone(CHECK_CONFIG_RESULT_DEFAULT);
+
+  switch (field) {
+    case 'services':
+      result = getServicePosition({
+        configText,
+        service: service as GetServicePosition<K, D>,
+        config,
+      });
+      break;
+    default:
+  }
+
+  return result;
+}
+
+function checkLocation(
+  {
+    location,
+    service,
+    config,
+    configText,
+  }: { location: string; service: string; config: ConfigFile; configText: string },
+  name = 'Location'
+): CheckConfigResult[] {
   const res: CheckConfigResult[] = [];
   const allowedRegexp = /^[\\//0-9A-Za-z\\-_/]+$/;
   if (!allowedRegexp.test(location)) {
     res.push({
-      msg: `${name} "${location}" of service "${item}" has unallowed symbols`,
+      msg: `${name} "${location}" of service "${service}" has unallowed symbols`,
       data: `Allowed regexp ${allowedRegexp}`,
       exit: true,
+      position: getPosition({
+        service: {
+          name: service,
+          property: 'ports',
+          value: { location },
+        },
+        config,
+        configText,
+        field: 'services',
+      }),
     });
   }
   const startRegexp = /^\/[a-zA-Z0-9]*/;
   if (!startRegexp.test(location)) {
     res.push({
-      msg: `${name} "${location}" of service "${item}" have wrong start`,
+      msg: `${name} "${location}" of service "${service}" have wrong start`,
       data: `It must starts with "/", Allowed start regexp ${startRegexp}`,
       exit: true,
+      position: getPosition({
+        service: {
+          name: service,
+          property: 'ports',
+          value: { location },
+        },
+        config,
+        configText,
+        field: 'services',
+      }),
     });
   }
   if (/\/{2,}/.test(location)) {
     res.push({
-      msg: `${name} "${location}" of service "${item}" have two or more slushes together`,
+      msg: `${name} "${location}" of service "${service}" have two or more slushes together`,
       data: 'Do not use two and more slushes together in location',
       exit: true,
+      position: getPosition({
+        service: {
+          name: service,
+          property: 'ports',
+          value: { location },
+        },
+        config,
+        configText,
+        field: 'services',
+      }),
     });
   }
   return res;
@@ -594,9 +841,10 @@ export const VOLUME_REMOTE_PREFIX_REGEX = /^:/;
 export const VOLUME_UPLOAD_MAX_SIZE = 100000;
 
 export async function checkConfig(
-  { services, server }: ConfigFile,
+  { config, configText }: { config: ConfigFile; configText: string },
   { deployData, isServer }: { deployData: DeployData; isServer: boolean }
 ): Promise<CheckConfigResult[]> {
+  const { services, server } = config;
   let res: CheckConfigResult[] = [];
 
   if (!deployData) {
@@ -604,6 +852,12 @@ export async function checkConfig(
       msg: 'Something went wrong',
       data: "Deploy data didn't receive from server",
       exit: true,
+      position: getPosition({
+        config,
+        configText,
+        field: null,
+        service: null,
+      }),
     });
     return res;
   }
@@ -615,6 +869,12 @@ export async function checkConfig(
         msg: 'Property is required for parameter "server"',
         data: 'node_name',
         exit: true,
+        position: getPosition({
+          config,
+          configText,
+          field: 'server',
+          service: null,
+        }),
       });
       return res;
     }
@@ -626,6 +886,12 @@ export async function checkConfig(
       msg: 'Required field is missing',
       data: 'services',
       exit: true,
+      position: getPosition({
+        config,
+        configText,
+        field: null,
+        service: null,
+      }),
     });
     return res;
   }
@@ -638,6 +904,16 @@ export async function checkConfig(
       msg: 'Services list can not be empty',
       data: 'Add at least one service',
       exit: true,
+      position: getPosition({
+        config,
+        configText,
+        field: 'services',
+        service: {
+          name: '',
+          property: null,
+          value: null,
+        },
+      }),
     });
     return res;
   }
@@ -647,7 +923,7 @@ export async function checkConfig(
     const {
       domains,
       ports,
-      type,
+      image,
       environment,
       version,
       command,
@@ -666,6 +942,16 @@ export async function checkConfig(
           msg: `Service "${item}" has too much volumes: "${volumes.length}"`,
           data: `Maximum count of volumes is ${COUNT_OF_VOLUMES_MAX}`,
           exit: true,
+          position: getPosition({
+            config,
+            configText,
+            field: 'services',
+            service: {
+              name: item,
+              property: 'volumes',
+              value: null,
+            },
+          }),
         });
       }
       /**
@@ -680,6 +966,16 @@ export async function checkConfig(
             msg: `Service "${item}" has wrong volume "${_item}". Local part of volume must satisfy regex:`,
             data: `${VOLUME_LOCAL_REGEX}`,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'volumes',
+                value: _item,
+              },
+            }),
           });
           continue;
         }
@@ -703,6 +999,16 @@ export async function checkConfig(
                 msg: `Service "${item}" has wrong volume "${_item}". Local path is not exists:`,
                 data: localPath,
                 exit: true,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'volumes',
+                    value: _item,
+                  },
+                }),
               });
             }
           } else if (!isServer) {
@@ -712,6 +1018,16 @@ export async function checkConfig(
                 msg: `Service "${item}" has wrong volume "${_item}".`,
                 data: "Directory can't be a volume, only files",
                 exit: true,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'volumes',
+                    value: _item,
+                  },
+                }),
               });
             }
             if (stats.size >= VOLUME_UPLOAD_MAX_SIZE) {
@@ -719,6 +1035,16 @@ export async function checkConfig(
                 msg: `Volume file '${localPath}' of service "${item}" is too big.`,
                 data: `Maximum size of volume file is: ${VOLUME_UPLOAD_MAX_SIZE / 1000}kb`,
                 exit: true,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'volumes',
+                    value: localPath,
+                  },
+                }),
               });
             }
           }
@@ -731,6 +1057,16 @@ export async function checkConfig(
             msg: `Service "${item}" has two or more volumes with the same file name.`,
             data: filename,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'volumes',
+                value: filename,
+              },
+            }),
           });
         } else {
           volNames.push(filename);
@@ -741,6 +1077,16 @@ export async function checkConfig(
             msg: `Service "${item}" has wrong volume "${_item}". Remote part of volume must satisfy regex:`,
             data: `${VOLUME_REMOTE_REGEX}`,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'volumes',
+                value: _item,
+              },
+            }),
           });
           continue;
         }
@@ -750,6 +1096,16 @@ export async function checkConfig(
             msg: `Service "${item}" has wrong volume "${_item}". Remote part of volume is not absolute`,
             data: remotePath,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'volumes',
+                value: _item,
+              },
+            }),
           });
         }
       }
@@ -761,15 +1117,35 @@ export async function checkConfig(
         msg: "Service name contains the not allowed symbol: '%'",
         data: `"${item}"`,
         exit: true,
+        position: getPosition({
+          config,
+          configText,
+          field: 'services',
+          service: {
+            name: item,
+            property: null,
+            value: null,
+          },
+        }),
       });
     }
 
     // Check service type
-    if (SERVICE_TYPES.indexOf(type) === -1) {
+    if (SERVICE_TYPES.indexOf(image) === -1) {
       res.push({
-        msg: `Service type "${type}" is not allowed in service ${item}`,
+        msg: `Service image "${image}" is not allowed in service ${item}`,
         data: `Allowed service types: [${SERVICE_TYPES.join('|')}]`,
         exit: true,
+        position: getPosition({
+          config,
+          configText,
+          field: 'services',
+          service: {
+            name: item,
+            property: 'image',
+            value: image,
+          },
+        }),
       });
     }
 
@@ -777,13 +1153,23 @@ export async function checkConfig(
 
     // Check service public
     if (_public) {
-      if (isCommonService(type) && !isCommonServicePublic(type)) {
+      if (isCommonService(image) && !isCommonServicePublic(image)) {
         res.push({
           msg: `Service "${item}" can not have public ports`,
           data: `Only services can have public ports: [${(SERVICES_CUSTOM as any[])
             .concat(SERVICES_COMMON_PUBLIC)
             .join('|')}]`,
           exit: true,
+          position: getPosition({
+            config,
+            configText,
+            field: 'services',
+            service: {
+              name: item,
+              property: 'active',
+              value: null,
+            },
+          }),
         });
       }
     }
@@ -794,6 +1180,16 @@ export async function checkConfig(
         msg: `Version doesn't exists in service "${item}"`,
         data: 'Try to add the field version to the config file',
         exit: true,
+        position: getPosition({
+          config,
+          configText,
+          field: 'services',
+          service: {
+            name: item,
+            property: null,
+            value: null,
+          },
+        }),
       });
       return res;
     }
@@ -812,26 +1208,56 @@ export async function checkConfig(
         msg: `Size '${size}' doesn't allowed in service "${item}"`,
         data: `Allowed sizes: ${sizes.map(({ name }) => name).join('|')}`,
         exit: true,
+        position: getPosition({
+          config,
+          configText,
+          field: 'services',
+          service: {
+            name: item,
+            property: 'size',
+            value: size,
+          },
+        }),
       });
     }
 
     // Check version
-    if (!checkVersion({ services: _s, type, version }) && version !== 'latest') {
+    if (!checkVersion({ services: _s, type: image, version }) && version !== 'latest') {
       res.push({
         msg: `Version "${version}" of service "${item}" is no longer supported`,
-        data: `See allowed versions: ${_s.find((_item) => _item.type === type)?.hub}tags`,
+        data: `See allowed versions: ${_s.find((_item) => _item.type === image)?.hub}tags`,
         exit: false,
+        position: getPosition({
+          config,
+          configText,
+          field: 'services',
+          service: {
+            name: item,
+            property: 'version',
+            value: version,
+          },
+        }),
       });
     }
 
     // Check custom services
-    if (isCustomService(type)) {
+    if (isCustomService(image)) {
       // Check pwd
       if (!pwd) {
         res.push({
           msg: `Required parameter 'pwd' is missing in service "${item}"`,
           data: `"${item}"`,
           exit: true,
+          position: getPosition({
+            config,
+            configText,
+            field: 'services',
+            service: {
+              name: item,
+              property: 'pwd',
+              value: null,
+            },
+          }),
         });
         return res;
       }
@@ -840,6 +1266,16 @@ export async function checkConfig(
           msg: `Parameter 'pwd' must be relative in service "${item}"`,
           data: pwd,
           exit: true,
+          position: getPosition({
+            config,
+            configText,
+            field: 'services',
+            service: {
+              name: item,
+              property: 'pwd',
+              value: pwd,
+            },
+          }),
         });
         return res;
       }
@@ -848,6 +1284,16 @@ export async function checkConfig(
           msg: `Default parameter 'pwd' must be '${PWD_DEFAULT}' in service "${item}"`,
           data: pwd,
           exit: true,
+          position: getPosition({
+            config,
+            configText,
+            field: 'services',
+            service: {
+              name: item,
+              property: 'pwd',
+              value: pwd,
+            },
+          }),
         });
       }
 
@@ -859,6 +1305,16 @@ export async function checkConfig(
             msg: `Missing required parameter 'git.url' in service "${item}"`,
             data: url,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'git',
+                value: null,
+              },
+            }),
           });
           return res;
         }
@@ -867,6 +1323,16 @@ export async function checkConfig(
             msg: `Missing required parameter 'git.branch' in service "${item}"`,
             data: url,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'git',
+                value: null,
+              },
+            }),
           });
           return res;
         }
@@ -876,6 +1342,18 @@ export async function checkConfig(
             msg: `Wrong parameter 'git.url' in service "${item}"`,
             data: `Only urls which related to ${GIT_TYPES.join('|')} are supported`,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'git',
+                value: {
+                  url,
+                },
+              },
+            }),
           });
           return res;
         }
@@ -885,6 +1363,18 @@ export async function checkConfig(
             msg: `Failed to parse parameter 'git.url' in service "${item}"`,
             data: 'Url must contain user and repository for example: https://github.com/user/repository.git',
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'git',
+                value: {
+                  url,
+                },
+              },
+            }),
           });
         }
         if (untracked) {
@@ -893,6 +1383,18 @@ export async function checkConfig(
               msg: `Failed parameter 'git.untracked' in service "${item}"`,
               data: `Allowed values [${Object.keys(GIT_UNTRACKED_POLICY).join('|')}]`,
               exit: true,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'git',
+                  value: {
+                    untracked,
+                  },
+                },
+              }),
             });
           }
         }
@@ -904,6 +1406,16 @@ export async function checkConfig(
           msg: `Ports must be array in service "${item}"`,
           data: '',
           exit: true,
+          position: getPosition({
+            config,
+            configText,
+            field: 'services',
+            service: {
+              name: item,
+              property: 'ports',
+              value: null,
+            },
+          }),
         });
         return res;
       }
@@ -915,6 +1427,16 @@ export async function checkConfig(
             msg: `Maximum port length for service "${item}" with size "${size}" is ${service.ports}`,
             data: `Decrease count of ports at least to "${service.ports}" or set up a bigger service size`,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'ports',
+                value: null,
+              },
+            }),
           });
         }
       }
@@ -928,6 +1450,18 @@ export async function checkConfig(
                 msg: `Timeout for port "${port}" of service "${item}" doesn't have any effect`,
                 data: `Timeout property doesn't allow for port type "${_type}"`,
                 exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      timeout,
+                    },
+                  },
+                }),
               });
             } else {
               const timeoutStr = timeout.toString();
@@ -936,6 +1470,18 @@ export async function checkConfig(
                   msg: `Timeout for port "${port}" of service "${item}" must be a string`,
                   data: `For example "30s", received "${timeout}"`,
                   exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        port,
+                      },
+                    },
+                  }),
                 });
               } else {
                 const postfix = timeoutStr.match(/[a-zA-Z]{1,2}$/);
@@ -947,6 +1493,18 @@ export async function checkConfig(
                         postfix[0]
                       }"`,
                       exit: true,
+                      position: getPosition({
+                        config,
+                        configText,
+                        field: 'services',
+                        service: {
+                          name: item,
+                          property: 'ports',
+                          value: {
+                            port,
+                          },
+                        },
+                      }),
                     });
                   }
                 }
@@ -960,6 +1518,18 @@ export async function checkConfig(
                 msg: `Buffer size for port "${port}" of service "${item}" doesn't have any effect`,
                 data: `Buffer size property doesn't allow for port type "${_type}"`,
                 exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      buffer_size,
+                    },
+                  },
+                }),
               });
             } else {
               const bufferStr = buffer_size.toString();
@@ -968,6 +1538,18 @@ export async function checkConfig(
                   msg: `Buffer size for port "${port}" of service "${item}" must be a string`,
                   data: `For example "10k", received "${buffer_size}"`,
                   exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        buffer_size,
+                      },
+                    },
+                  }),
                 });
               } else {
                 const prefix = bufferStr.match(/^[0-9]+/);
@@ -978,6 +1560,18 @@ export async function checkConfig(
                       msg: `Buffer size for port "${port}" of service "${item}" is not allowed`,
                       data: `Maximmum allowed buffer size is "${BUFFER_SIZE_MAX}k", received "${num}k"`,
                       exit: true,
+                      position: getPosition({
+                        config,
+                        configText,
+                        field: 'services',
+                        service: {
+                          name: item,
+                          property: 'ports',
+                          value: {
+                            buffer_size,
+                          },
+                        },
+                      }),
                     });
                   }
                 }
@@ -990,6 +1584,18 @@ export async function checkConfig(
               msg: `Port "${port}" of service "${item}" is missing`,
               data: '',
               exit: true,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    port: 0,
+                  },
+                },
+              }),
             });
             return res;
           }
@@ -998,20 +1604,49 @@ export async function checkConfig(
               msg: `Port "${port}" of service "${item}" must be an integer`,
               data: '',
               exit: true,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    port,
+                  },
+                },
+              }),
             });
           }
           // Check location
           if (location) {
-            res = res.concat(checkLocation(location, item));
+            res = res.concat(checkLocation({ location, configText, config, service: item }));
           }
           // Check proxy_path
           if (proxy_path) {
-            res = res.concat(checkLocation(proxy_path, item, 'Proxy path'));
+            res = res.concat(
+              checkLocation(
+                { location: proxy_path, service: item, config, configText },
+                'Proxy path'
+              )
+            );
             if (_type === 'php') {
               res.push({
                 msg: 'Property "proxy_path" doesn\'t have any effect for port type "php"',
                 data: item,
                 exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      proxy_path,
+                    },
+                  },
+                }),
               });
             }
           }
@@ -1021,6 +1656,18 @@ export async function checkConfig(
               msg: `Port type "${_type}" of service "${item}" is not allowed`,
               data: `Allowed port types: [${PORT_TYPES.join('|')}]`,
               exit: true,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    type: _type,
+                  },
+                },
+              }),
             });
           }
           // Check port static
@@ -1031,13 +1678,37 @@ export async function checkConfig(
                   msg: `Field "static.location" is required for port ${port}`,
                   data: item,
                   exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        static: [],
+                      },
+                    },
+                  }),
                 });
               }
               if (!path) {
                 res.push({
-                  msg: `Field "static.path" is required for port ${port}`,
+                  msg: `Field "static.path" is required for port '${port}' in service "${item}"`,
                   data: item,
                   exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        static: [],
+                      },
+                    },
+                  }),
                 });
               }
               if (index) {
@@ -1047,6 +1718,18 @@ export async function checkConfig(
                     msg: `Field "static.index" for port ${port} in service "${item}" contains not allowed symbols`,
                     data: `Allowed regexp ${indexReg}`,
                     exit: true,
+                    position: getPosition({
+                      config,
+                      configText,
+                      field: 'services',
+                      service: {
+                        name: item,
+                        property: 'ports',
+                        value: {
+                          static: [],
+                        },
+                      },
+                    }),
                   });
                 }
               }
@@ -1056,10 +1739,22 @@ export async function checkConfig(
                   msg: 'Fields "location" and "static.location" can not be the same',
                   data: `Check port "${port}" of service "${item}"`,
                   exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        static: [],
+                      },
+                    },
+                  }),
                 });
               }
               // Check location
-              res.concat(checkLocation(_location, item));
+              res.concat(checkLocation({ location: _location, config, configText, service: item }));
             });
           }
         }
@@ -1074,6 +1769,16 @@ export async function checkConfig(
               msg: `Maximum allowed domain length is ${DOMAIN_MAX_LENGTH}. Passed domain is too long: ${domain.length}`,
               data: domain,
               exit: true,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'domains',
+                  value: null,
+                },
+              }),
             });
           }
         });
@@ -1087,6 +1792,16 @@ export async function checkConfig(
             msg: `Environment variable ${_item} has wrong format`,
             data: `Try use NAME=value instead of ${_item}`,
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'environment',
+                value: _item,
+              },
+            }),
           });
         }
       });
@@ -1099,6 +1814,16 @@ export async function checkConfig(
               msg: `Service "${item}" depends on of missing service "${_item}"`,
               data: `Try remove 'depends_on' item "${_item}" from service "${item}", or set service "${_item}" active`,
               exit: true,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'depends_on',
+                  value: _item,
+                },
+              }),
             });
           }
         });
@@ -1113,22 +1838,42 @@ export async function checkConfig(
         const { name } = variable;
         if (!name) {
           res.push({
-            msg: `Environment variable ${_item} has wrong format`,
+            msg: `Environment variable '${_item}' has wrong format in service "${item}"`,
             data: 'Try use NAME=value instead',
             exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'environment',
+                value: _item,
+              },
+            }),
           });
         }
       });
     }
 
     // Check common services
-    if (isCommonService(type)) {
+    if (isCommonService(image)) {
       // Check ports
       if (ports) {
         res.push({
           msg: `Field "ports" is not allowed for service "${item}"`,
           data: `Ports is only allowed for services [${SERVICES_CUSTOM.join('|')}]`,
           exit: true,
+          position: getPosition({
+            config,
+            configText,
+            field: 'services',
+            service: {
+              name: item,
+              property: 'ports',
+              value: null,
+            },
+          }),
         });
       }
 
@@ -1138,6 +1883,16 @@ export async function checkConfig(
           msg: `Field "command" is not allowed for service "${item}"`,
           data: `Command is only allowed for services [${SERVICES_CUSTOM.join('|')}]`,
           exit: true,
+          position: getPosition({
+            config,
+            configText,
+            field: 'services',
+            service: {
+              name: item,
+              property: 'command',
+              value: null,
+            },
+          }),
         });
       }
 
@@ -1145,7 +1900,7 @@ export async function checkConfig(
         // Check depends on
         let checkDeps = false;
         serviceKeys.forEach((_item) => {
-          const { type: _type, depends_on: _depends_on } = services[_item];
+          const { image: _type, depends_on: _depends_on } = services[_item];
           if (isCustomService(_type)) {
             if (!_depends_on) {
               return true;
@@ -1161,16 +1916,26 @@ export async function checkConfig(
         if (
           !checkDeps &&
           !_public &&
-          SERVICES_COMMON_PUBLIC.indexOf(type as ServiceTypeCommonPublic) === -1
+          SERVICES_COMMON_PUBLIC.indexOf(image as ServiceTypeCommonPublic) === -1
         ) {
           res.push({
-            msg: `You have ${type} service with name "${item}", but none custom service depends on it`,
+            msg: `You have ${image} service with name "${item}", but none custom service depends on it`,
             data: `Add "depends_on" field with item "${item}" to any custom service`,
             exit: false,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'image',
+                value: null,
+              },
+            }),
           });
         }
 
-        const commonVaribles = ENVIRONMENT_REQUIRED_COMMON[type as ServiceTypeCommon];
+        const commonVaribles = ENVIRONMENT_REQUIRED_COMMON[image as ServiceTypeCommon];
 
         commonVaribles.forEach((_item) => {
           const check = (environment || []).find((__item) => {
@@ -1189,6 +1954,16 @@ export async function checkConfig(
               msg: `Required environment variable for service "${item}" is missing:`,
               data: _item,
               exit: true,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'environment',
+                  value: null,
+                },
+              }),
             });
           }
         });
@@ -1205,7 +1980,7 @@ export async function checkConfig(
           if (index !== -1) {
             serviceKeys.forEach((__item) => {
               const {
-                type: _type,
+                image: _type,
                 environment: _environment,
                 depends_on: _depends_on,
               } = services[__item];
@@ -1237,6 +2012,16 @@ export async function checkConfig(
                       msg: `Service "${item}" provided ${name}, but in a service ${__item} dependent on it is not provided`,
                       data: `Try to add environment variable ${name} to the service ${__item}`,
                       exit: false,
+                      position: getPosition({
+                        config,
+                        configText,
+                        field: 'services',
+                        service: {
+                          name: item,
+                          property: 'environment',
+                          value: name,
+                        },
+                      }),
                     });
                   }
                   if (value !== _envVal && check) {
@@ -1244,6 +2029,16 @@ export async function checkConfig(
                       msg: `Service "${item}" provided ${name}, but in a service ${__item} dependent on it this variable value is not the same`,
                       data: `Your service ${__item} will not be able to connect to service ${item}`,
                       exit: false,
+                      position: getPosition({
+                        config,
+                        configText,
+                        field: 'services',
+                        service: {
+                          name: item,
+                          property: 'environment',
+                          value: name,
+                        },
+                      }),
                     });
                   }
                 }
