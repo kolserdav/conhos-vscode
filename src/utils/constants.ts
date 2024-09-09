@@ -1,0 +1,1 @@
+export const YAML_ORIGINAL_LINK = 'https://raw.githubusercontent.com/textmate/yaml.tmbundle/master/Syntaxes/YAML.tmLanguage'

@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "main": "index.js",
   "engines": {
-    "vscode": "^1.92.0"
+    "vscode": "^1.50.0"
   },
   "scripts": {
     "dev": "webpack --mode development --watch",
@@ -15,21 +15,27 @@
     "Programming Languages"
   ],
   "contributes": {
-    "commands": [{
-      "command": "extension.checkTemplate",
-      "title": "Check Template Fields"
-    }],
+    "commands": [
+      {
+        "command": "extension.checkTemplate",
+        "title": "Check Template Fields"
+      }
+    ],
     "configuration": {
-            "type": "object",
-            "title": "YAML Template Checker",
-            "properties": {
-                "yamlTemplateChecker.requiredFields": {
-                    "type": "array",
-                    "default": ["field1", "field2", "field3"],
-                    "description": "List of required fields in the YAML template."
-                }
-            }
-        },
+      "type": "object",
+      "title": "YAML Template Checker",
+      "properties": {
+        "yamlTemplateChecker.requiredFields": {
+          "type": "array",
+          "default": [
+            "field1",
+            "field2",
+            "field3"
+          ],
+          "description": "List of required fields in the YAML template."
+        }
+      }
+    },
     "languages": [
       {
         "id": "yaml",
@@ -57,7 +63,10 @@
   ],
   "devDependencies": {
     "@types/node": "^22.5.4",
+    "@typescript-eslint/eslint-plugin": "^8.4.0",
+    "@typescript-eslint/parser": "^8.4.0",
     "eslint": "^9.10.0",
+    "eslint-plugin-prettier": "^5.2.1",
     "ts-loader": "^9.5.1",
     "vscode": "^1.1.37",
     "webpack": "^5.94.0",
@@ -65,6 +74,10 @@
     "webpack-dev-server": "^5.1.0"
   },
   "dependencies": {
-    "rimraf": "^6.0.1"
+    "rimraf": "^6.0.1",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "yaml": "^2.5.1"
   }
 }

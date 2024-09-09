@@ -1,26 +1,30 @@
 // @ts-check
-const path = require("path");
+const path = require('path');
 
 const debugWebpack = !!process.env.DEBUG_WEBPACK;
 
 /** @type {import('webpack').Configuration} */
 const config = {
-  target: "node",
+  target: 'node',
   context: __dirname,
-  entry: "./src/extension.ts",
-  output: {
-    path: path.resolve(__dirname, "dist"),
-    filename: "extension.js",
-    libraryTarget: "commonjs2",
+  entry: {
+    extension: './src/extension.ts',
+    server: './src/server.ts',
+    interfaces: './src/interfaces.ts',
   },
-  devtool: "nosources-source-map",
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: '[name].js',
+    libraryTarget: 'commonjs2',
+  },
+  devtool: 'nosources-source-map',
   externals: {
-    vscode: "commonjs vscode",
+    vscode: 'commonjs vscode',
   },
   resolve: {
-    extensions: [".ts", ".js"],
+    extensions: ['.ts', '.js'],
     alias: {
-      vscode: path.resolve(__dirname, "node_modules/vscode"),
+      vscode: path.resolve(__dirname, 'node_modules/vscode'),
     },
   },
   module: {
@@ -30,7 +34,7 @@ const config = {
         exclude: /node_modules/,
         use: [
           {
-            loader: "ts-loader",
+            loader: 'ts-loader',
           },
         ],
       },

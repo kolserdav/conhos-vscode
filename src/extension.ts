@@ -1,55 +1,47 @@
+import path from 'path';
 import * as vscode from 'vscode';
+import {
+  LanguageClient,
+  LanguageClientOptions,
+  ServerOptions,
+  TransportKind,
+} from 'vscode-languageclient/node';
+
+let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-    let disposable = vscode.commands.registerCommand('extension.checkTemplate', () => {
-        const editor = vscode.window.activeTextEditor;
-        console.log(353)
-        if (editor) {
-            const document = editor.document;
-            if (document.languageId !== 'yaml') {
-                return;
-            }
+  console.log(2323);
+  const serverModule = context.asAbsolutePath(path.join('dist', 'server.js'));
+  let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
+  let serverOptions: ServerOptions = {
+    run: { module: serverModule, transport: TransportKind.ipc },
+    debug: {
+      module: serverModule,
+      transport: TransportKind.ipc,
+      options: debugOptions,
+    },
+  };
 
-            const fileName = document.fileName;
-            if (!fileName.endsWith('conhos.yml')) {
-                return;
-            }
+  const clientOptions: LanguageClientOptions = {
+    documentSelector: [{ scheme: 'file', language: 'yaml' }],
+    synchronize: {
+      fileEvents: vscode.workspace.createFileSystemWatcher('*.yml'),
+    },
+  };
 
-            const text = document.getText();
-            console.log(22, vscode.workspace.getConfiguration('yamlTemplateChecker'))
-            const requiredFields = vscode.workspace.getConfiguration('yamlTemplateChecker').requiredFields;
-            const missingFields = checkForMissingFields(text, requiredFields);
-
-            if (missingFields.length > 0) {
-                vscode.window.showErrorMessage(`Missing fields: ${missingFields.join(', ')}`);
-            } else {
-                vscode.window.showInformationMessage('All fields are present.');
-            }
-        }
-    });
-
-    const disposable1 = vscode.workspace.onDidChangeTextDocument(event => {
-        // Получаем измененный документ
-        const document = event.document;
-        console.log(434);
-        // Проверяем, что документ имеет нужный язык (например, YAML)
-        if (document.languageId === 'yaml') {
-            // Здесь вы можете добавить свою логику обработки изменений
-            console.log(`Document changed: ${document.fileName}`);
-            // Например, вы можете проверить содержимое документа
-            const text = document.getText();
-            // Ваша логика проверки или обработки текста
-        }
-    });
-
-    context.subscriptions.push(disposable);
-
-    context.subscriptions.push(disposable1);
+  client = new LanguageClient(
+    'myLanguageServer',
+    'My Language Server',
+    serverOptions,
+    clientOptions
+  );
+  console.log(232);
+  client.start();
 }
 
-function checkForMissingFields(text: string, requiredFields: string[]): string[] {
-    const missingFields = requiredFields.filter(field => !text.includes(field));
-    return missingFields;
+export function deactivate(): Thenable<void> | undefined {
+  if (!client) {
+    return undefined;
+  }
+  return client.stop();
 }
-
-export function deactivate() {}

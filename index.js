@@ -1,7 +1,6 @@
 // @ts-check
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const extension = require("./dist/extension.js");
+const extension = require('./dist/extension.js');
 
 async function activate(ctx) {
   return await extension.activate(ctx);
