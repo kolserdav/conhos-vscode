@@ -32,7 +32,7 @@
     "scripts": "node ./dist/scripts.js",
     "package": "vsce package -o out",
     "deploy": "vsce publish ${version} --pat $(cat .azure-dev-api-key)",
-    "build": "npm run pakage"
+    "build": "rimraf out/* && npm run package"
   },
   "categories": [
     "Programming Languages"
