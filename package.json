@@ -1,8 +1,10 @@
 {
   "name": "conhos-vscode",
-  "displayName": "conhos-vscode",
+  "version": "0.0.2",
+  "displayName": "Conhos",
+  "publisher": "kolserdav",
+  "icon": "resources/logo.png",
   "description": "Highlights the syntax of the conhos.yml file",
-  "version": "0.0.1",
   "license": "MIT",
   "main": "index.js",
   "types": "types.d.ts",
@@ -29,7 +31,7 @@
     "build": "rimraf dist/* && webpack --mode production",
     "scripts": "node ./dist/scripts.js",
     "package": "vsce package -o out",
-    "publish": "vsce publish $VERSION --pat $AZURE_DEV_API_KEY"
+    "publish": "vsce publish ${version} --pat $(cat .azure-dev-api-key)"
   },
   "categories": [
     "Programming Languages"

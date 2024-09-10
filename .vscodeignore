@@ -1,4 +1,10 @@
 .vscode/**
 .vscode-test/**
+webpack.config*
 .gitignore
 vsc-extension-quickstart.md
+.azure-dev-api-key
+eslint.config.js
+conhos.yml
+tsconfig.json
+types.d.ts
