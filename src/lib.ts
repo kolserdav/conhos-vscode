@@ -1,382 +1,37 @@
-import { tmpdir } from 'os';
-import type { default as FS } from 'fs';
+import { default as FS } from 'fs';
+import {
+  CheckConfigResult,
+  ConfigFile,
+  DeployData,
+  GitType,
+  ServiceSize,
+  ServiceType,
+  ServiceTypeCommon,
+  ServiceTypeCommonPublic,
+  ServiceTypeCustom,
+  Volumes,
+  WSMessageCli,
+  WSMessageDataCli,
+} from '../types.';
+import log from './utils/log';
+import {
+  BUFFER_SIZE_MAX,
+  COUNT_OF_VOLUMES_MAX,
+  ENVIRONMENT_REQUIRED_COMMON,
+  ENVIRONMENT_SWITCH,
+  GIT_TYPES,
+  GIT_UNTRACKED_POLICY,
+  PORT_TYPES,
+  PWD_DEFAULT,
+  SERVICE_TYPES,
+  SERVICES_COMMON,
+  SERVICES_COMMON_PUBLIC,
+  SERVICES_CUSTOM,
+} from './constants';
 import { basename, isAbsolute, resolve } from 'path';
-import { CacheItem } from 'cache-changed';
-
-export type ServiceTypeCustom = 'node' | 'rust' | 'python' | 'golang' | 'php';
-
-export type ServiceTypeCommon =
-  | 'redis'
-  | 'postgres'
-  | 'mysql'
-  | 'adminer'
-  | 'mariadb'
-  | 'mongo'
-  | 'rabbitmq'
-  | 'phpmyadmin'
-  | 'pgadmin'
-  | 'mongo_express';
-
-export type ServiceTypeCommonPublic = 'adminer' | 'phpmyadmin' | 'pgadmin' | 'mongo_express';
-
-export type ServiceType = ServiceTypeCommon | ServiceTypeCustom;
-
-export type ServiceSize =
-  | 'pico'
-  | 'nano'
-  | 'micro'
-  | 'mili'
-  | 'santi'
-  | 'deci'
-  | 'deca'
-  | 'hecto'
-  | 'kilo';
-
-export type PortType = 'http' | 'ws' | 'chunked' | 'php';
-
-export type GitUntrackedPolicy = 'checkout' | 'push' | 'merge';
-
-export type Domains = Record<string, string>;
-
-export interface Port {
-  port: number;
-  type: PortType;
-  location?: string;
-  timeout?: string;
-  buffer_size?: string;
-  proxy_path?: string;
-  static?: {
-    location: string;
-    path: string;
-    index?: string;
-  }[];
-}
-
-export interface NewDomains {
-  serviceName: string;
-  domains: Domains;
-  serviceType: ServiceType;
-  serviceId: string | null;
-}
-
-export interface Git {
-  url: string;
-  branch: string;
-  untracked?: GitUntrackedPolicy;
-}
-
-export interface ConfigFile {
-  name: string;
-  server?: {
-    node_name: string;
-    api_key: string;
-  };
-  services: Record<
-    string,
-    {
-      active: boolean;
-      image: ServiceType;
-      size: ServiceSize;
-      version: string;
-      no_restart?: boolean;
-      pwd?: string;
-      git?: Git;
-      exclude?: string[];
-      command?: string;
-      ports?: Port[];
-      volumes?: string[];
-      depends_on?: string[];
-      domains?: NewDomains['domains'];
-      environment?: string[];
-    }
-  >;
-}
-
-export type ProxyPaths = Record<string, string>;
-
-export type Volumes = Record<string, string[]>;
+import { tmpdir } from 'os';
 
 let fs: typeof FS | null = null;
-
-export const ERROR_LOG_PREFIX = 'error:';
-
-export const BUFFER_SIZE_MAX = 512;
-
-export const PWD_DEFAULT = './';
-
-export const COUNT_OF_VOLUMES_MAX = 10;
-
-export const ENVIRONMENT_SWITCH = {
-  redis: {
-    password: 'REDIS_PASSWORD',
-  },
-  mysql: {
-    rootPassword: 'MYSQL_ROOT_PASSWORD',
-  },
-  mariadb: {
-    rootPassword: 'MARIADB_ROOT_PASSWORD',
-  },
-};
-
-export const ENVIRONMENT_REQUIRED_COMMON: Record<ServiceTypeCommon, string[]> = {
-  redis: [ENVIRONMENT_SWITCH.redis.password],
-  postgres: ['POSTGRES_PASSWORD', 'POSTGRES_USER', 'POSTGRES_DB'],
-  adminer: [],
-  mysql: [ENVIRONMENT_SWITCH.mysql.rootPassword, 'MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_DATABASE'],
-  mariadb: [
-    ENVIRONMENT_SWITCH.mariadb.rootPassword,
-    'MARIADB_USER',
-    'MARIADB_PASSWORD',
-    'MARIADB_DATABASE',
-  ],
-  mongo: ['MONGO_INITDB_ROOT_USERNAME', 'MONGO_INITDB_ROOT_PASSWORD'],
-  rabbitmq: ['RABBITMQ_DEFAULT_PASS', 'RABBITMQ_DEFAULT_USER'],
-  phpmyadmin: [],
-  pgadmin: ['PGADMIN_DEFAULT_PASSWORD', 'PGADMIN_DEFAULT_EMAIL'],
-  mongo_express: [
-    'ME_CONFIG_BASICAUTH_USERNAME',
-    'ME_CONFIG_BASICAUTH_PASSWORD',
-    'ME_CONFIG_MONGODB_AUTH_USERNAME',
-    'ME_CONFIG_MONGODB_AUTH_PASSWORD',
-  ],
-};
-
-export const SERVICES_CUSTOM: ServiceTypeCustom[] = ['node', 'rust', 'python', 'golang', 'php'];
-
-export const SERVICES_COMMON: ServiceTypeCommon[] = [
-  'redis',
-  'postgres',
-  'mysql',
-  'mariadb',
-  'mongo',
-  'rabbitmq',
-  'adminer',
-  'phpmyadmin',
-  'pgadmin',
-  'mongo_express',
-];
-
-export const SERVICES_COMMON_PUBLIC: ServiceTypeCommonPublic[] = [
-  'adminer',
-  'phpmyadmin',
-  'pgadmin',
-  'mongo_express',
-];
-
-const SERVICE_TYPES: ServiceType[] = (SERVICES_COMMON as any[]).concat(SERVICES_CUSTOM);
-
-export interface DeployData {
-  services: {
-    type: ServiceType;
-    name: string;
-    images: string;
-    tags: string[];
-    hub: string;
-  }[];
-  sizes: {
-    name: string;
-    memory: {
-      name: string;
-      value: number;
-    };
-    cpus: number;
-    storage: string;
-    ports: number;
-  }[];
-  baseValue: number;
-  baseCost: number;
-}
-
-export const GIT_UNTRACKED_POLICY: Record<GitUntrackedPolicy, GitUntrackedPolicy> = {
-  merge: 'merge',
-  checkout: 'checkout',
-  push: 'push',
-};
-
-export type GitType = 'github' | 'gitlab';
-
-export const GIT_TYPES: GitType[] = ['github', 'gitlab'];
-
-const DEFAULT_WS_ADDRESS = 'wss://ws.conhos.ru';
-export const WEBSOCKET_ADDRESS = process.env.WEBSOCKET_ADDRESS || DEFAULT_WS_ADDRESS;
-if (DEFAULT_WS_ADDRESS !== WEBSOCKET_ADDRESS && process.env.NODE_ENV === 'production') {
-  console.warn(
-    'warn',
-    'Default websocket address have changed by WEBSOCKET_ADDRESS to:',
-    process.env.WEBSOCKET_ADDRESS
-  );
-}
-
-export const HEADER_CONN_ID = 'conn-id';
-export const HEADER_TARBALL = 'tar';
-export const UPLOAD_CHUNK_DELIMITER = '<[rn]>';
-export const UPLOADED_FILE_MESSAGE = `${UPLOAD_CHUNK_DELIMITER}Uploaded`;
-export const LOG_END_MESSAGE = '';
-export const UPLOAD_REQUEST_TIMEOUT = 1000 * 60 * 20 * 100;
-export const LOGS_REQUEST_TIMEOUT = 1000 * 60 * 20 * 100;
-export const REGEXP_IS_DOMAIN = /[a-zA-Z0-9\\-]+\.[a-zA-Z0-9]+$/;
-
-export const PORT_DEFAULT: Port = {
-  port: 3000,
-  type: 'http',
-};
-
-const _PORT_TYPES: Record<PortType, PortType> = {
-  http: 'http',
-  php: 'php',
-  chunked: 'chunked',
-  ws: 'ws',
-};
-
-export const PORT_TYPES: PortType[] = Object.keys(_PORT_TYPES) as PortType[];
-
-export type Status = 'info' | 'warn' | 'error';
-
-export interface UploadFileBody {
-  num: number;
-  chunk: string | Buffer;
-}
-
-export interface WSMessageDataCli {
-  any: any;
-  setSocketCli: {
-    connId: string;
-    deployData: DeployData;
-  };
-  setSocketServer: {
-    version: string;
-  };
-  loginCli: string;
-  loginServer: string;
-  checkTokenCli: {
-    checked: boolean;
-    skipSetProject: boolean;
-    errMess?: string;
-  };
-  checkTokenServer: {
-    skipSetProject: boolean;
-  };
-  message: {
-    msg: string | number;
-    end: boolean;
-  };
-  prepareDeployServer: {
-    projectDeleted: boolean;
-    config: ConfigFile;
-    volumes: Volumes;
-    interractive: boolean;
-  };
-  deployPrepareVolumeUploadCli: {
-    url: string;
-    serviceName: string;
-  };
-  prepareDeployCli: {
-    exclude: string[] | undefined;
-    pwd: string;
-    service: string;
-    cache: CacheItem[];
-    active: boolean;
-    git?: Git;
-  };
-  deployGitServer: {
-    git: Git;
-    pwd: string;
-    service: string;
-    last: boolean;
-    active: boolean;
-  };
-  deployGitCli: {
-    service: string;
-    last: boolean;
-  };
-  deployEndServer: {
-    service: string;
-    skip: boolean;
-    last: boolean;
-    latest: boolean;
-    file: string;
-    num: number;
-  };
-  deployDeleteFilesServer: {
-    service: string;
-    files: string[];
-    cwd: string;
-    last: boolean;
-    pwd: string;
-  };
-  deployDeleteFilesCli: {
-    service: string;
-    files: string[];
-    cwd: string;
-    last: boolean;
-    url: string;
-    pwd: string;
-  };
-  getDeployData: {
-    nodeName?: string;
-  };
-  deployData: DeployData;
-  getLogsServer: {
-    watch: boolean;
-    timestamps: boolean;
-    project: string;
-    serviceName: string;
-    since: string | undefined;
-    until: string | undefined;
-    tail: number | undefined;
-    clear: boolean;
-    config: ConfigFile | null;
-  };
-  getLogsCli: {
-    url: string;
-  } & WSMessageDataCli['getLogsServer'];
-  logs: {
-    last: boolean;
-    text: string;
-    num: number;
-  };
-  remove: {
-    project: string;
-  };
-  acceptDeleteCli: {
-    containerName: string;
-    serviceName: string;
-    serviceType: ServiceTypeCommon;
-  };
-  acceptDeleteServer: {
-    containerName: string;
-    accept: boolean;
-  };
-  ipServer: {
-    project: string;
-  };
-  ipCli: {
-    ip: string;
-  };
-}
-
-interface CheckConfigResult {
-  msg: string;
-  data: string;
-  exit: boolean;
-  position: {
-    lineStart: number;
-    lineEnd: number;
-    columnStart: number;
-    columnEnd: number;
-  };
-}
-
-export interface WSMessageCli<T extends keyof WSMessageDataCli> {
-  status: Status;
-  type: T;
-  packageName: string;
-  message: string;
-  userId: string;
-  data: WSMessageDataCli[T];
-  token: string | null;
-  connId: string;
-}
 
 export const PROTOCOL_CLI = 'cli';
 export const PORT_MAX = 65535;
@@ -390,7 +45,7 @@ export function computeCostService(
   const index = sizes.findIndex((item) => item.name === serviceSize);
   const currValueItem = sizes.find((item) => item.name === serviceSize);
   if (!currValueItem) {
-    console.error('Failed to get cost of service for', serviceSize);
+    log('error', 'Failed to get cost of service for', serviceSize);
     return null;
   }
 
@@ -407,10 +62,6 @@ export function computeCostService(
   return { month, hour, minute };
 }
 
-export type ConfigFileBackend = Omit<ConfigFile, 'services'> & {
-  services: Record<string, ConfigFile['services'][0] & { serviceId: string }>;
-};
-
 export function parseMessageCli<T extends keyof WSMessageDataCli>(
   msg: string
 ): WSMessageCli<T> | null {
@@ -418,7 +69,7 @@ export function parseMessageCli<T extends keyof WSMessageDataCli>(
   try {
     data = JSON.parse(msg);
   } catch (e) {
-    console.error('Failed parse message', e);
+    log('error', 'Failed parse message', e);
   }
   return data;
 }
@@ -733,7 +384,6 @@ function getServicePosition<
       }
     }
   });
-  console.log(1, propLines, propertyIndex);
   return propLines[propertyIndex] || valueLines[serviceIndex] || result;
 }
 
@@ -1049,7 +699,7 @@ export async function checkConfig(
             }
           }
         } else {
-          console.error('FS is missing in checkConfig', '');
+          log('error', 'FS is missing in checkConfig', '');
         }
         const filename = basename(localPath);
         if (volNames.indexOf(filename) !== -1) {
@@ -2253,7 +1903,7 @@ export async function changeConfigFileVolumes(
           if (fs) {
             fs.writeFileSync(tmpFilePath, file);
           } else {
-            console.warn('FS is missing in changeConfigFileVolumes', '');
+            log('warn', 'FS is missing in changeConfigFileVolumes', '');
           }
           _config.services[serviceKey].volumes?.push(`${tmpFilePath}:${remote}`);
           _volumes[serviceKey].push(`${http}${volume}`);

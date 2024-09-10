@@ -4,12 +4,14 @@ import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
+  State,
   TransportKind,
 } from 'vscode-languageclient/node';
+import log from './utils/log';
 
 let client: LanguageClient;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   const serverModule = context.asAbsolutePath(path.join('dist', 'server.js'));
   let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
   let serverOptions: ServerOptions = {
@@ -24,7 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: 'yaml' }],
     synchronize: {
-      fileEvents: vscode.workspace.createFileSystemWatcher('*.yml'),
+      fileEvents: vscode.workspace.createFileSystemWatcher('*conhos.y(a)ml'),
     },
   };
 
@@ -35,6 +37,22 @@ export function activate(context: vscode.ExtensionContext) {
     clientOptions
   );
   client.start();
+
+  client.onDidChangeState((event) => {
+    switch (event.newState) {
+      case State.Starting:
+        log('info', 'Client is starting...', event);
+        break;
+      case State.Running:
+        log('info', 'Client is ready', event);
+        break;
+      case State.Stopped:
+        log('error', 'Client is stopped', event);
+        break;
+      default:
+        log('warn', 'Default newState', event);
+    }
+  });
 }
 
 export function deactivate(): Thenable<void> | undefined {

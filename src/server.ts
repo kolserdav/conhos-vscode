@@ -7,59 +7,21 @@ import {
   TextDocumentSyncKind,
   InitializeResult,
   InitializeParams,
-  DidChangeConfigurationNotification,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parse } from './utils/yaml';
-import { checkConfig } from './interfaces';
 import log from './utils/log';
 import { getMedialplan } from './utils/request';
+import { SOURCE } from './constants';
+import { checkConfig } from './lib';
 
-const source = 'conhos';
+const source = SOURCE;
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 let hasConfigurationCapability: boolean = false;
 let hasWorkspaceFolderCapability: boolean = false;
-
-connection.onInitialize((params: InitializeParams) => {
-  let capabilities = params.capabilities;
-
-  // Does the client support the `workspace/configuration` request?
-  // If not, we fall back using global settings.
-  hasConfigurationCapability = !!(capabilities.workspace && !!capabilities.workspace.configuration);
-  hasWorkspaceFolderCapability = !!(
-    capabilities.workspace && !!capabilities.workspace.workspaceFolders
-  );
-
-  const result: InitializeResult = {
-    capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Incremental,
-    },
-  };
-  if (hasWorkspaceFolderCapability) {
-    result.capabilities.workspace = {
-      workspaceFolders: {
-        supported: true,
-      },
-    };
-  }
-  return result;
-});
-
-connection.onInitialized(() => {
-  if (hasConfigurationCapability) {
-    // Register for all configuration changes.
-    connection.client.register(DidChangeConfigurationNotification.type, undefined);
-  }
-  if (hasWorkspaceFolderCapability) {
-    connection.workspace.onDidChangeWorkspaceFolders((_event) => {
-      connection.console.log('Workspace folder change event received.');
-    });
-  }
-});
-
 interface ExampleSettings {
   maxNumberOfProblems: number;
 }
@@ -69,8 +31,34 @@ const defaultSettings: ExampleSettings = { maxNumberOfProblems: 1000 };
 // Cache the settings of all open documents
 let documentSettings: Map<string, Thenable<ExampleSettings>> = new Map();
 
+connection.onInitialize((params: InitializeParams) => {
+  let capabilities = params.capabilities;
+
+  hasConfigurationCapability = !!(capabilities.workspace && !!capabilities.workspace.configuration);
+  hasWorkspaceFolderCapability = !!(
+    capabilities.workspace && !!capabilities.workspace.workspaceFolders
+  );
+
+  const result: InitializeResult = {
+    capabilities: {
+      textDocumentSync: TextDocumentSyncKind.Incremental,
+      callHierarchyProvider: false,
+    },
+  };
+  if (hasWorkspaceFolderCapability) {
+    result.capabilities.workspace = {
+      workspaceFolders: {
+        supported: true,
+      },
+    };
+  }
+
+  return result;
+});
+
 // Only keep settings for open documents
 documents.onDidClose((e) => {
+  log('error', 'Server was closed', e);
   documentSettings.delete(e.document.uri);
 });
 
@@ -82,12 +70,14 @@ connection.onDidChangeWatchedFiles((_change) => {
 documents.onDidChangeContent(async (change) => {
   const diagnostics: Diagnostic[] = [];
   const document = documents.get(change.document.uri);
+
   if (!document) {
     log('warn', 'Document is missing', document);
     return;
   }
   const configText = document.getText();
   const { data: config, error } = parse(configText);
+
   if (error || !config) {
     diagnostics.push({
       severity: DiagnosticSeverity.Error,
@@ -107,10 +97,10 @@ documents.onDidChangeContent(async (change) => {
     diagnostics.push({
       severity: DiagnosticSeverity.Error,
       range: {
-        start: { line: 0, character: 1 },
-        end: { line: 0, character: 1 },
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 5 },
       },
-      message: 'Failed to conect to server. Try again later.',
+      message: 'Failed to conect to server. Check network connection and try again.',
       source,
     });
     connection.sendDiagnostics({ uri: change.document.uri, diagnostics });

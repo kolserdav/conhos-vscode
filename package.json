@@ -3,39 +3,42 @@
   "displayName": "conhos-vscode",
   "description": "Highlights the syntax of the conhos.yml file",
   "version": "0.0.1",
+  "license": "MIT",
   "main": "index.js",
-  "types": "src/interfaces.ts",
+  "types": "types.d.ts",
   "engines": {
     "vscode": "^1.50.0"
   },
+  "keywords": [
+    "docker",
+    "compose",
+    "container",
+    "containers",
+    "cloud",
+    "hosting"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kolserdav/conhos-vscode"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "webpack --mode development --watch",
-    "build": "rimraf dist/* && webpack --mode production --devtool hidden-source-map"
+    "build": "rimraf dist/* && webpack --mode production",
+    "scripts": "node ./dist/scripts.js",
+    "package": "vsce package -o out",
+    "publish": "vsce publish $VERSION --pat $AZURE_DEV_API_KEY"
   },
   "categories": [
     "Programming Languages"
   ],
   "contributes": {
-    "commands": [
-      {
-        "command": "extension.checkTemplate",
-        "title": "Check Template Fields"
-      }
-    ],
+    "commands": [],
     "configuration": {
       "type": "object",
-      "title": "YAML Template Checker",
-      "properties": {
-        "yamlTemplateChecker.requiredFields": {
-          "type": "array",
-          "default": [
-            "field1",
-            "field2",
-            "field3"
-          ],
-          "description": "List of required fields in the YAML template."
-        }
-      }
+      "title": "Conhos Configuration Checker"
     },
     "languages": [
       {
@@ -45,7 +48,8 @@
           "yml"
         ],
         "extensions": [
-          ".yml .yaml"
+          "conhos.yml",
+          "conhos.yaml"
         ],
         "configuration": "./language-configuration.json"
       }
@@ -54,18 +58,18 @@
       {
         "language": "yaml",
         "path": "./syntaxes/yml.tmLanguage.json",
-        "scopeName": "conhos.yml conhos.yaml"
+        "scopeName": "source.yaml"
       }
     ]
   },
   "activationEvents": [
-    "onLanguage:yaml",
-    "onCommand:extension.checkTemplate"
+    "onLanguage:yaml"
   ],
   "devDependencies": {
     "@types/node": "^22.5.4",
     "@typescript-eslint/eslint-plugin": "^8.4.0",
     "@typescript-eslint/parser": "^8.4.0",
+    "commander": "^12.1.0",
     "eslint": "^9.10.0",
     "eslint-plugin-prettier": "^5.2.1",
     "ts-loader": "^9.5.1",
