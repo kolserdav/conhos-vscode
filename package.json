@@ -1,13 +1,12 @@
 {
   "name": "conhos-vscode",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "displayName": "Conhos",
   "publisher": "kolserdav",
   "icon": "resources/logo.png",
   "description": "Highlights the syntax of the conhos.yml file",
   "license": "MIT",
   "main": "index.js",
-  "types": "index.d.ts",
   "engines": {
     "vscode": "^1.50.0"
   },
@@ -24,7 +23,8 @@
     "url": "https://github.com/kolserdav/conhos-vscode"
   },
   "files": [
-    "dist"
+    "dist",
+    "index.d.ts"
   ],
   "scripts": {
     "dev": "webpack --mode development --watch",
