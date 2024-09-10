@@ -5,6 +5,7 @@ node_modules
 .gitignore
 .azure-dev-api-key
 eslint.config.js
+.prettierrc
 conhos.yml
 tsconfig.json
 types.d.ts
