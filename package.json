@@ -1,6 +1,6 @@
 {
   "name": "conhos-vscode",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "displayName": "Conhos",
   "publisher": "kolserdav",
   "icon": "resources/logo.png",
@@ -31,7 +31,8 @@
     "build": "rimraf dist/* && webpack --mode production",
     "scripts": "node ./dist/scripts.js",
     "package": "vsce package -o out",
-    "publish": "vsce publish ${version} --pat $(cat .azure-dev-api-key)"
+    "publish": "vsce publish ${version} --pat $(cat .azure-dev-api-key)",
+    "deploy": "npm run build && npm run pakage && npm publish"
   },
   "categories": [
     "Programming Languages"
