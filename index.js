@@ -1,5 +1,3 @@
-// @ts-check
-
 const extension = require('./dist/extension.js');
 
 async function activate(ctx) {
