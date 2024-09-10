@@ -1,3 +1,13 @@
+/******************************************************************************************
+ * Repository: Conhos vscode
+ * File name: lib.ts
+ * Author: Sergey Kolmiller
+ * Email: <kolserdav@conhos.ru>
+ * License: MIT
+ * License text: See LICENSE file
+ * Copyright: kolserdav, All rights reserved (c)
+ * Create Date: Tue Sep 10 2024 16:42:55 GMT+0700 (Krasnoyarsk Standard Time)
+ ******************************************************************************************/
 import { default as FS } from 'fs';
 import {
   CheckConfigResult,
@@ -12,7 +22,7 @@ import {
   Volumes,
   WSMessageCli,
   WSMessageDataCli,
-} from '../types.';
+} from '..';
 import log from './utils/log';
 import {
   BUFFER_SIZE_MAX,

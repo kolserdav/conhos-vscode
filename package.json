@@ -7,7 +7,6 @@
   "description": "Highlights the syntax of the conhos.yml file",
   "license": "MIT",
   "main": "index.js",
-  "types": "types.d.ts",
   "engines": {
     "vscode": "^1.50.0"
   },
@@ -88,5 +87,21 @@
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
     "yaml": "^2.5.1"
+  },
+  "fhead": {
+    "root": "src",
+    "repository": "Conhos vscode",
+    "patterns": [
+      ".ts"
+    ],
+    "exclude": [
+      "node_modules"
+    ],
+    "name": "Sergey Kolmiller",
+    "email": "kolserdav@conhos.ru",
+    "license": "MIT",
+    "licenseText": "See LICENSE file",
+    "copyright": "kolserdav, All rights reserved (c)",
+    "renewAll": false
   }
 }

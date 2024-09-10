@@ -1,8 +1,4 @@
-import { tmpdir } from 'os';
-import type { default as FS } from 'fs';
-import { basename, isAbsolute, resolve } from 'path';
-import { CacheItem } from 'cache-changed';
-import log from './src/utils/log';
+import type { CacheItem } from 'cache-changed';
 
 export type ServiceTypeCustom = 'node' | 'rust' | 'python' | 'golang' | 'php';
 
