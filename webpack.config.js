@@ -15,7 +15,7 @@ const config = ({ WEBPACK_BUILD }, argv) => {
       extension: './src/extension.ts',
       server: './src/server.ts',
       lib: './src/lib.ts',
-      constants: './src/lib.ts',
+      constants: './src/constants.ts',
       scripts: './src/scripts.ts',
     },
     devtool: WEBPACK_BUILD ? false : 'source-map',

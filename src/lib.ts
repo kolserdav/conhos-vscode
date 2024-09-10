@@ -8,7 +8,6 @@
  * Copyright: kolserdav, All rights reserved (c)
  * Create Date: Tue Sep 10 2024 16:42:55 GMT+0700 (Krasnoyarsk Standard Time)
  ******************************************************************************************/
-import { default as FS } from 'fs';
 import {
   CheckConfigResult,
   ConfigFile,
@@ -27,6 +26,7 @@ import log from './utils/log';
 import {
   BUFFER_SIZE_MAX,
   COUNT_OF_VOLUMES_MAX,
+  DOMAIN_MAX_LENGTH,
   ENVIRONMENT_REQUIRED_COMMON,
   ENVIRONMENT_SWITCH,
   GIT_TYPES,
@@ -37,15 +37,19 @@ import {
   SERVICES_COMMON,
   SERVICES_COMMON_PUBLIC,
   SERVICES_CUSTOM,
+  VOLUME_LOCAL_POSTFIX_REGEX,
+  VOLUME_LOCAL_REGEX,
+  VOLUME_REMOTE_PREFIX_REGEX,
+  VOLUME_REMOTE_REGEX,
+  VOLUME_UPLOAD_MAX_SIZE,
 } from './constants';
 import { basename, isAbsolute, resolve } from 'path';
 import { tmpdir } from 'os';
+import getFs from './fs';
 
-let fs: typeof FS | null = null;
+type FS = Awaited<ReturnType<typeof getFs>> | null;
 
-export const PROTOCOL_CLI = 'cli';
-export const PORT_MAX = 65535;
-export const DOMAIN_MAX_LENGTH = 77;
+let fs: FS = null;
 
 export function computeCostService(
   serviceSize: ServiceSize,
@@ -494,15 +498,9 @@ function checkLocation(
   return res;
 }
 
-export const VOLUME_LOCAL_REGEX = /^[/a-zA-Z0-9.\-_]+:/;
-export const VOLUME_LOCAL_POSTFIX_REGEX = /:$/;
-export const VOLUME_REMOTE_REGEX = /:[/a-zA-Z0-9.\-_]+$/;
-export const VOLUME_REMOTE_PREFIX_REGEX = /^:/;
-export const VOLUME_UPLOAD_MAX_SIZE = 100000;
-
-export async function checkConfig(
+export async function checkConfig<S extends boolean>(
   { config, configText }: { config: ConfigFile; configText: string },
-  { deployData, isServer }: { deployData: DeployData; isServer: boolean }
+  { deployData, isServer }: { deployData: DeployData; isServer: S }
 ): Promise<CheckConfigResult[]> {
   const { services, server } = config;
   let res: CheckConfigResult[] = [];
@@ -643,15 +641,17 @@ export async function checkConfig(
         fs =
           fs !== null
             ? fs
-            : await new Promise((_resolve) => {
-                if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
-                  import('fs').then((_fs) => {
-                    _resolve(_fs.default);
-                  });
-                } else {
-                  _resolve(null);
-                }
-              });
+            : typeof window === 'undefined'
+              ? await new Promise((_resolve) => {
+                  if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
+                    getFs().then((_fs) => {
+                      _resolve(_fs);
+                    });
+                  } else {
+                    _resolve(null);
+                  }
+                })
+              : null;
         if (fs) {
           if (!fs.existsSync(localPath)) {
             if (!isServer) {
@@ -671,7 +671,7 @@ export async function checkConfig(
                 }),
               });
             }
-          } else if (!isServer) {
+          } else if (!isServer && typeof window === 'undefined') {
             const stats = fs.statSync(localPath);
             if (stats.isDirectory()) {
               res.push({
@@ -1901,15 +1901,17 @@ export async function changeConfigFileVolumes(
           fs =
             fs !== null
               ? fs
-              : await new Promise((_resolve) => {
-                  if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
-                    import('fs').then((_fs) => {
-                      _resolve(_fs.default);
-                    });
-                  } else {
-                    _resolve(null);
-                  }
-                });
+              : typeof window === 'undefined'
+                ? await new Promise((_resolve) => {
+                    if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
+                      getFs().then((_fs) => {
+                        _resolve(_fs);
+                      });
+                    } else {
+                      _resolve(null);
+                    }
+                  })
+                : null;
           if (fs) {
             fs.writeFileSync(tmpFilePath, file);
           } else {

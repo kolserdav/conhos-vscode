@@ -19,6 +19,16 @@ import {
   ServiceTypeCustom,
 } from '..';
 
+export const PROTOCOL_CLI = 'cli';
+export const PORT_MAX = 65535;
+export const DOMAIN_MAX_LENGTH = 77;
+
+export const VOLUME_LOCAL_REGEX = /^[/a-zA-Z0-9.\-_]+:/;
+export const VOLUME_LOCAL_POSTFIX_REGEX = /:$/;
+export const VOLUME_REMOTE_REGEX = /:[/a-zA-Z0-9.\-_]+$/;
+export const VOLUME_REMOTE_PREFIX_REGEX = /^:/;
+export const VOLUME_UPLOAD_MAX_SIZE = 100000;
+
 export const ERROR_LOG_PREFIX = 'error:';
 
 export const BUFFER_SIZE_MAX = 512;

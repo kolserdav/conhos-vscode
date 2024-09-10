@@ -150,6 +150,7 @@ export interface WSMessageDataCli {
   prepareDeployServer: {
     projectDeleted: boolean;
     config: ConfigFile;
+    configText: string;
     volumes: Volumes;
     interractive: boolean;
   };
