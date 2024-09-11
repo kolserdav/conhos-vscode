@@ -12,9 +12,11 @@ import type { DeployData } from '../../index';
 import { YAML_ORIGINAL_URL_RAW } from '../constants';
 import log from './log';
 
+const IS_DEV = process.env.NODE_ENV === 'development';
+
 export function getMedialplan() {
   return new Promise<DeployData | null>((resolve) => {
-    fetch('http://localhost:3001/v1/get-media-plan')
+    fetch(`${IS_DEV ? 'http://localhost:3001' : 'https://server.conhos.ru'}/v1/get-media-plan`)
       .then((r) => r.json())
       .then((d) => {
         resolve(d.data);
