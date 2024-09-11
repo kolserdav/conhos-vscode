@@ -1,5 +1,6 @@
 // @ts-check
 const path = require('path');
+const TerserPlugin = require('terser-webpack-plugin');
 
 /**
  * @param {{WEBPACK_BUILD?: boolean}} param0
@@ -44,6 +45,21 @@ const config = ({ WEBPACK_BUILD }, argv) => {
             },
           ],
         },
+      ],
+    },
+    optimization: {
+      minimize: WEBPACK_BUILD,
+      minimizer: [
+        new TerserPlugin({
+          terserOptions: {
+            ecma: 2020,
+            output: {
+              comments: false,
+            },
+            mangle: false,
+          },
+          extractComments: false,
+        }),
       ],
     },
   };
