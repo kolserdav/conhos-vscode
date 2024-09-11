@@ -132,7 +132,7 @@ documents.onDidChangeContent(async (change) => {
         start: { line: lineStart, character: columnStart },
         end: { line: lineEnd, character: columnEnd },
       },
-      message: `${msg} (${data})`,
+      message: `${msg} ${data ? `(${data})` : ''}`,
       source,
     });
   }

@@ -16,6 +16,7 @@ import type {
   GitType,
   Port,
   PortStatic,
+  Server,
   ServiceSize,
   ServiceType,
   ServiceTypeCommon,
@@ -46,6 +47,19 @@ import {
   VOLUME_REMOTE_REGEX,
 } from './constants';
 import { basename, isAbsolute } from 'path';
+
+type ConfigServerDefault<O extends Server> = {
+  [K in keyof Required<O>]: {
+    required: undefined extends O[K] ? false : true;
+    value: Required<O[K]>;
+  };
+};
+
+function createServerDefault<O extends Server>(
+  config: ConfigServerDefault<O>
+): ConfigServerDefault<O> {
+  return config;
+}
 
 type ConfigStaticDefault<O extends PortStatic> = {
   [K in keyof Required<O>]: {
@@ -85,7 +99,7 @@ function createGitDefault<O extends Git>(config: ConfigGitDefault<O>): ConfigGit
 type ConfigFileDefault<T extends keyof ConfigFile> = {
   name: T;
   required: undefined extends ConfigFile[T] ? false : true;
-  value: ConfigFile[T];
+  value: T extends 'server' ? Required<ReturnType<typeof createServerDefault>> : ConfigFile[T];
 };
 
 type ConfigServiceDefault<O extends ConfigFile['services'][0]> = {
@@ -111,21 +125,27 @@ function createConfigDefaultItem<T extends keyof ConfigFile>(
   return config;
 }
 
-export const CONFIG_DEFAULT = [
-  createConfigDefaultItem({
+export const CONFIG_DEFAULT = {
+  name: createConfigDefaultItem({
     name: 'name',
     required: true,
     value: '',
   }),
-  createConfigDefaultItem({
+  server: createConfigDefaultItem({
     name: 'server',
     required: false,
-    value: {
-      node_name: '',
-      api_key: '',
-    },
+    value: createServerDefault({
+      node_name: {
+        required: true,
+        value: '',
+      },
+      api_key: {
+        required: true,
+        value: '',
+      },
+    }),
   }),
-  {
+  services: {
     name: 'services',
     required: true,
     value: createServiceDefault({
@@ -181,7 +201,7 @@ export const CONFIG_DEFAULT = [
             required: false,
             value: '',
           },
-          location: {
+          pathname: {
             required: false,
             value: '',
           },
@@ -242,7 +262,7 @@ export const CONFIG_DEFAULT = [
       },
     }),
   },
-];
+};
 
 export function computeCostService(
   serviceSize: ServiceSize,
@@ -415,11 +435,37 @@ const CHECK_CONFIG_RESULT_DEFAULT: CheckConfigResult['position'] = {
 };
 
 function createPropertyRegex(property: string) {
-  return new RegExp(`^\\s+${property}:`);
+  return new RegExp(`^\\s*${property}:`);
 }
 
 function getColumnStart(propertyM: RegExpMatchArray, property: string): number {
   return propertyM[0].length - property.length - 1;
+}
+
+function getRootPosition({
+  configText,
+  field,
+}: {
+  configText: string;
+  field: string;
+}): CheckConfigResult['position'] {
+  let result = structuredClone(CHECK_CONFIG_RESULT_DEFAULT);
+  const lines = configText.split('\n');
+  lines.every((line, lineNumber) => {
+    const propertyM = line.match(createPropertyRegex(field));
+    if (propertyM) {
+      const columnStart = getColumnStart(propertyM, field);
+      result = {
+        lineStart: lineNumber,
+        lineEnd: lineNumber,
+        columnStart,
+        columnEnd: propertyM[0].length,
+      };
+      return false;
+    }
+    return true;
+  });
+  return result;
 }
 
 function getServicePosition<
@@ -441,7 +487,7 @@ function getServicePosition<
 
   let serviceIndex = 0;
   let propertyIndex = 0;
-  Object.keys(services).every((item, index) => {
+  (Object.keys(services) || []).every((item, index) => {
     if (item === name) {
       lines.every((line, lineNumber) => {
         const propertyM = line.match(createPropertyRegex(name));
@@ -458,7 +504,7 @@ function getServicePosition<
         return true;
       });
 
-      // Set serviceIndex adn prooertyIndex
+      // Set serviceIndex and prooertyIndex
       Object.keys(services[item]).every((_value) => {
         if (property === _value) {
           serviceIndex = index;
@@ -478,6 +524,7 @@ function getServicePosition<
                     propertyIndex = serviceIndex;
                   }
                 } else {
+                  console.log(2, propField);
                   if (
                     // @ts-ignore
                     services[item][_value as keyof ConfigFile['services'][0]][propField] !==
@@ -488,6 +535,10 @@ function getServicePosition<
                 }
               }
             );
+          } else {
+            if (_value === property) {
+              propertyIndex = serviceIndex;
+            }
           }
 
           return false;
@@ -538,6 +589,8 @@ function getServicePosition<
                         });
                       }
                     });
+                  } else {
+                    log('warn', 'Unexpected case 593', obj);
                   }
                 });
               } else if (typeof services[name][property] === 'object') {
@@ -560,6 +613,8 @@ function getServicePosition<
                     });
                   }
                 });
+              } else {
+                log('warn', 'Unexpected case 617', property);
               }
             });
           } else {
@@ -591,7 +646,20 @@ function getServicePosition<
       }
     }
   });
-  return propLines[propertyIndex] || valueLines[serviceIndex] || result;
+
+  return (
+    getArrayValue(propLines, propertyIndex) || getArrayValue(valueLines, serviceIndex) || result
+  );
+}
+
+function getArrayValue(arr: any[], index: number) {
+  if (index === 0) {
+    return arr[0];
+  }
+  if (arr[index] !== undefined) {
+    return arr[index];
+  }
+  return getArrayValue(arr, index - 1);
 }
 
 export function getPosition<
@@ -620,6 +688,9 @@ export function getPosition<
       });
       break;
     default:
+      if (field) {
+        result = getRootPosition({ configText, field });
+      }
   }
 
   return result;
@@ -645,7 +716,7 @@ function checkLocation(
         service: {
           name: service,
           property: 'ports',
-          value: { location },
+          value: { pathname: location },
         },
         config,
         configText,
@@ -663,7 +734,7 @@ function checkLocation(
         service: {
           name: service,
           property: 'ports',
-          value: { location },
+          value: { pathname: location },
         },
         config,
         configText,
@@ -680,7 +751,7 @@ function checkLocation(
         service: {
           name: service,
           property: 'ports',
-          value: { location },
+          value: { pathname: location },
         },
         config,
         configText,
@@ -688,6 +759,132 @@ function checkLocation(
       }),
     });
   }
+  return res;
+}
+
+function checkRequiredParams({
+  config,
+  configText,
+}: {
+  config: ConfigFile;
+  configText: string;
+}): CheckConfigResult[] {
+  const res: CheckConfigResult[] = [];
+  const configKeys = Object.keys(config);
+
+  // Loop by default
+  Object.keys(CONFIG_DEFAULT).forEach((configDefaultKey) => {
+    const entityDefault = CONFIG_DEFAULT[configDefaultKey as keyof typeof CONFIG_DEFAULT];
+    if (configKeys.indexOf(configDefaultKey) === -1 && entityDefault.required) {
+      res.push({
+        msg: `Required parameter "${configDefaultKey}" is missing`,
+        data: '',
+        exit: true,
+        position: getPosition({
+          config,
+          configText,
+          field: null,
+          service: null,
+        }),
+      });
+      return;
+    }
+
+    const { services } = config;
+
+    switch (configDefaultKey) {
+      case 'services':
+        // Loop by service default
+        Object.keys(CONFIG_DEFAULT.services.value).forEach((serviceDefaultKey) => {
+          const v = parseInt(serviceDefaultKey, 10);
+          if (!Number.isNaN(v)) {
+            return;
+          }
+          Object.keys(services).forEach((serviceKey) => {
+            const service = services[serviceKey];
+            let serviceFieldIsExist = false;
+
+            Object.keys(service).forEach((servicePropKey) => {
+              if (serviceDefaultKey === servicePropKey) {
+                serviceFieldIsExist = true;
+              }
+            });
+
+            if (
+              !serviceFieldIsExist &&
+              CONFIG_DEFAULT.services.value[
+                serviceDefaultKey as keyof typeof CONFIG_DEFAULT.services.value
+              ].required
+            ) {
+              res.push({
+                msg: `Required parameter "${serviceDefaultKey}" is missing in service "${serviceKey}"`,
+                data: '',
+                exit: true,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: serviceKey,
+                    property: null,
+                    value: null,
+                  },
+                }),
+              });
+              return;
+            }
+          });
+        });
+
+        // Loop by services
+        Object.keys(services).forEach((serviceKey) => {
+          const service = services[serviceKey];
+          Object.keys(service).forEach((servicePropKey) => {
+            if (
+              CONFIG_DEFAULT.services.value[
+                servicePropKey as keyof typeof CONFIG_DEFAULT.services.value
+              ] === undefined
+            ) {
+              res.push({
+                msg: `Parameter "${servicePropKey}" has no any effects in service "${serviceKey}"`,
+                data: '',
+                exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: serviceKey,
+                    property: servicePropKey as keyof ConfigFile['services'][0],
+                    value: null,
+                  },
+                }),
+              });
+            }
+          });
+        });
+        break;
+    }
+  });
+
+  // Loop by config
+  configKeys.forEach((configKey) => {
+    const isExists = CONFIG_DEFAULT[configKey as keyof typeof CONFIG_DEFAULT] !== undefined;
+    if (!isExists) {
+      res.push({
+        msg: `Parameter "${configKey}" has no any effects`,
+        data: '',
+        exit: false,
+        position: getPosition({
+          config,
+          configText,
+          field: configKey as keyof ConfigFile,
+          service: null,
+        }),
+      });
+    }
+  });
+
   return res;
 }
 
@@ -713,37 +910,9 @@ export async function checkConfig<S extends boolean>(
     return res;
   }
 
-  // Check server
-  if (server) {
-    if (!server.node_name) {
-      res.push({
-        msg: 'Property is required for parameter "server"',
-        data: 'node_name',
-        exit: true,
-        position: getPosition({
-          config,
-          configText,
-          field: 'server',
-          service: null,
-        }),
-      });
-      return res;
-    }
-  }
-
-  // Check services field
-  if (!services) {
-    res.push({
-      msg: 'Required field is missing',
-      data: 'services',
-      exit: true,
-      position: getPosition({
-        config,
-        configText,
-        field: null,
-        service: null,
-      }),
-    });
+  res = checkRequiredParams({ config, configText });
+  const isExit = res.findIndex((err) => err.exit) !== -1;
+  if (res.length !== 0 && isExit) {
     return res;
   }
 
@@ -964,6 +1133,26 @@ export async function checkConfig<S extends boolean>(
           service: {
             name: item,
             property: null,
+            value: null,
+          },
+        }),
+      });
+      return res;
+    }
+
+    // Check service active
+    if (typeof active !== 'boolean') {
+      res.push({
+        msg: `Property 'active' must be of type 'boolean' in service "${item}"`,
+        data: '',
+        exit: true,
+        position: getPosition({
+          config,
+          configText,
+          field: 'services',
+          service: {
+            name: item,
+            property: 'active',
             value: null,
           },
         }),
@@ -1219,7 +1408,7 @@ export async function checkConfig<S extends boolean>(
       }
 
       (ports || []).forEach(
-        ({ port, type: _type, location, timeout, buffer_size, static: _static, proxy_path }) => {
+        ({ port, type: _type, pathname, timeout, buffer_size, static: _static, proxy_path }) => {
           // Check timeout
           if (timeout) {
             if (_type !== 'chunked' && _type !== 'ws') {
@@ -1396,8 +1585,10 @@ export async function checkConfig<S extends boolean>(
             });
           }
           // Check location
-          if (location) {
-            res = res.concat(checkLocation({ location, configText, config, service: item }));
+          if (pathname) {
+            res = res.concat(
+              checkLocation({ location: pathname, configText, config, service: item })
+            );
           }
           // Check proxy_path
           if (proxy_path) {
@@ -1510,7 +1701,7 @@ export async function checkConfig<S extends boolean>(
                   });
                 }
               }
-              const loc = location || DEFAULT_LOCATION;
+              const loc = pathname || DEFAULT_LOCATION;
               if (loc === _location) {
                 res.push({
                   msg: 'Fields "location" and "static.location" can not be the same',

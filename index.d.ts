@@ -35,6 +35,11 @@ export type GitUntrackedPolicy = 'checkout' | 'push' | 'merge';
 
 export type Domains = Record<string, string>;
 
+////////////////////////////////////// Config //////////////////////////////////////
+/**
+ * Do not use the same names in different entities
+ * It's necessary to check posicion when check errors
+ */
 export interface PortStatic {
   location: string;
   path: string;
@@ -44,7 +49,7 @@ export interface PortStatic {
 export interface Port {
   port: number;
   type: PortType;
-  location?: string;
+  pathname?: string;
   timeout?: string;
   buffer_size?: string;
   proxy_path?: string;
@@ -64,12 +69,14 @@ export interface Git {
   untracked?: GitUntrackedPolicy;
 }
 
+export interface Server {
+  node_name: string;
+  api_key: string;
+}
+
 export interface ConfigFile {
   name: string;
-  server?: {
-    node_name: string;
-    api_key: string;
-  };
+  server?: Server;
   services: Record<
     string,
     {
@@ -90,6 +97,7 @@ export interface ConfigFile {
     }
   >;
 }
+////////////////////////////////////////////////////////////////////////////
 
 export type ProxyPaths = Record<string, string>;
 
