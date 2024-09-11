@@ -22,7 +22,6 @@ const config = ({ WEBPACK_BUILD }, argv) => {
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: '[name].js',
-      library: 'Conhos',
       libraryTarget: 'umd',
     },
     externals: {
