@@ -35,6 +35,12 @@ export type GitUntrackedPolicy = 'checkout' | 'push' | 'merge';
 
 export type Domains = Record<string, string>;
 
+export interface PortStatic {
+  location: string;
+  path: string;
+  index?: string;
+}
+
 export interface Port {
   port: number;
   type: PortType;
@@ -42,11 +48,7 @@ export interface Port {
   timeout?: string;
   buffer_size?: string;
   proxy_path?: string;
-  static?: {
-    location: string;
-    path: string;
-    index?: string;
-  }[];
+  static?: PortStatic[];
 }
 
 export interface NewDomains {
@@ -243,7 +245,7 @@ export interface WSMessageDataCli {
   };
 }
 
-interface CheckConfigResult {
+export interface CheckConfigResult {
   msg: string;
   data: string;
   exit: boolean;

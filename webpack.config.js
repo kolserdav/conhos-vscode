@@ -1,6 +1,5 @@
 // @ts-check
 const path = require('path');
-const TerserPlugin = require('terser-webpack-plugin');
 
 /**
  * @param {{WEBPACK_BUILD?: boolean}} param0
@@ -23,10 +22,11 @@ const config = ({ WEBPACK_BUILD }, argv) => {
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: '[name].js',
-      libraryTarget: 'commonjs2',
+      library: 'Conhos',
+      libraryTarget: 'umd',
     },
     externals: {
-      vscode: 'commonjs vscode',
+      vscode: 'umd vscode',
     },
     resolve: {
       extensions: ['.ts', '.js'],
@@ -45,19 +45,6 @@ const config = ({ WEBPACK_BUILD }, argv) => {
             },
           ],
         },
-      ],
-    },
-    optimization: {
-      minimize: true, // Включить минификацию
-      minimizer: [
-        new TerserPlugin({
-          terserOptions: {
-            output: {
-              comments: true, // Сохранить комментарии
-            },
-          },
-          extractComments: false, // Не извлекать комментарии в отдельный файл
-        }),
       ],
     },
   };

@@ -8,7 +8,8 @@
  * Copyright: kolserdav, All rights reserved (c)
  * Create Date: Tue Sep 10 2024 16:42:55 GMT+0700 (Krasnoyarsk Standard Time)
  ******************************************************************************************/
-import {
+import type {
+  ConfigFile,
   GitType,
   GitUntrackedPolicy,
   Port,
@@ -17,7 +18,7 @@ import {
   ServiceTypeCommon,
   ServiceTypeCommonPublic,
   ServiceTypeCustom,
-} from '..';
+} from '../index';
 
 export const PROTOCOL_CLI = 'cli';
 export const PORT_MAX = 65535;

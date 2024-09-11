@@ -22,7 +22,7 @@ import log from './utils/log';
 let client: LanguageClient;
 
 export async function activate(context: vscode.ExtensionContext) {
-  const serverModule = context.asAbsolutePath(path.join('dist', 'server.js'));
+  const serverModule = context.asAbsolutePath(path.join('dist', 'server'));
   let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
   let serverOptions: ServerOptions = {
     run: { module: serverModule, transport: TransportKind.ipc },

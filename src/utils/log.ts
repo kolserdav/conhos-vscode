@@ -8,7 +8,7 @@
  * Copyright: kolserdav, All rights reserved (c)
  * Create Date: Tue Sep 10 2024 16:42:55 GMT+0700 (Krasnoyarsk Standard Time)
  ******************************************************************************************/
-import { Status } from '../..';
+import type { Status } from '../../index';
 import { SOURCE } from '../constants';
 
 export default function log(status: Status, message: string, ...args: any) {

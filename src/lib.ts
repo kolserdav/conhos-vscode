@@ -8,11 +8,14 @@
  * Copyright: kolserdav, All rights reserved (c)
  * Create Date: Tue Sep 10 2024 16:42:55 GMT+0700 (Krasnoyarsk Standard Time)
  ******************************************************************************************/
-import {
+import type {
   CheckConfigResult,
   ConfigFile,
   DeployData,
+  Git,
   GitType,
+  Port,
+  PortStatic,
   ServiceSize,
   ServiceType,
   ServiceTypeCommon,
@@ -21,7 +24,7 @@ import {
   Volumes,
   WSMessageCli,
   WSMessageDataCli,
-} from '..';
+} from '../index';
 import log from './utils/log';
 import {
   BUFFER_SIZE_MAX,
@@ -41,15 +44,205 @@ import {
   VOLUME_LOCAL_REGEX,
   VOLUME_REMOTE_PREFIX_REGEX,
   VOLUME_REMOTE_REGEX,
-  VOLUME_UPLOAD_MAX_SIZE,
 } from './constants';
-import { basename, isAbsolute, resolve } from 'path';
-import { tmpdir } from 'os';
-import getFs from './fs';
+import { basename, isAbsolute } from 'path';
 
-type FS = Awaited<ReturnType<typeof getFs>> | null;
+type ConfigStaticDefault<O extends PortStatic> = {
+  [K in keyof Required<O>]: {
+    required: undefined extends O[K] ? false : true;
+    value: Required<O[K]>;
+  };
+};
 
-let fs: FS = null;
+function createStaticDefault<O extends PortStatic>(
+  config: ConfigStaticDefault<O>
+): ConfigStaticDefault<O> {
+  return config;
+}
+
+type ConfigPortsDefault<O extends Port> = {
+  [K in keyof Required<O>]: {
+    required: undefined extends O[K] ? false : true;
+    value: K extends 'static' ? Required<ReturnType<typeof createStaticDefault>> : Required<O[K]>;
+  };
+};
+
+function createPortsDefault<O extends Port>(config: ConfigPortsDefault<O>): ConfigPortsDefault<O> {
+  return config;
+}
+
+type ConfigGitDefault<O extends Git> = {
+  [K in keyof Required<O>]: {
+    required: undefined extends O[K] ? false : true;
+    value: Required<O[K]>;
+  };
+};
+
+function createGitDefault<O extends Git>(config: ConfigGitDefault<O>): ConfigGitDefault<O> {
+  return config;
+}
+
+type ConfigFileDefault<T extends keyof ConfigFile> = {
+  name: T;
+  required: undefined extends ConfigFile[T] ? false : true;
+  value: ConfigFile[T];
+};
+
+type ConfigServiceDefault<O extends ConfigFile['services'][0]> = {
+  [K in keyof Required<O>]: {
+    required: undefined extends O[K] ? false : true;
+    value: K extends 'git'
+      ? Required<ReturnType<typeof createGitDefault>>
+      : K extends 'ports'
+        ? Required<ReturnType<typeof createPortsDefault>>
+        : Required<O[K]>;
+  };
+};
+
+function createServiceDefault<O extends ConfigFile['services'][0]>(
+  config: ConfigServiceDefault<O>
+): ConfigServiceDefault<O> {
+  return config;
+}
+
+function createConfigDefaultItem<T extends keyof ConfigFile>(
+  config: ConfigFileDefault<T>
+): ConfigFileDefault<T> {
+  return config;
+}
+
+export const CONFIG_DEFAULT = [
+  createConfigDefaultItem({
+    name: 'name',
+    required: true,
+    value: '',
+  }),
+  createConfigDefaultItem({
+    name: 'server',
+    required: false,
+    value: {
+      node_name: '',
+      api_key: '',
+    },
+  }),
+  {
+    name: 'services',
+    required: true,
+    value: createServiceDefault({
+      image: {
+        required: true,
+        value: 'node',
+      },
+      size: {
+        required: true,
+        value: 'mili',
+      },
+      active: {
+        required: true,
+        value: true,
+      },
+      no_restart: {
+        required: false,
+        value: false,
+      },
+      version: {
+        required: true,
+        value: 'latest',
+      },
+      git: {
+        required: false,
+        value: createGitDefault({
+          url: {
+            required: true,
+            value: '',
+          },
+          untracked: {
+            required: false,
+            value: undefined,
+          },
+          branch: {
+            required: true,
+            value: '',
+          },
+        }),
+      },
+      ports: {
+        required: false,
+        value: createPortsDefault({
+          port: {
+            required: true,
+            value: 3000,
+          },
+          type: {
+            required: true,
+            value: 'http',
+          },
+          proxy_path: {
+            required: false,
+            value: '',
+          },
+          location: {
+            required: false,
+            value: '',
+          },
+          timeout: {
+            required: false,
+            value: '',
+          },
+          buffer_size: {
+            required: false,
+            value: '',
+          },
+          static: {
+            required: false,
+            value: createStaticDefault({
+              location: {
+                required: true,
+                value: '',
+              },
+              path: {
+                required: true,
+                value: '',
+              },
+              index: {
+                required: false,
+                value: '',
+              },
+            }),
+          },
+        }),
+      },
+      environment: {
+        required: false,
+        value: [],
+      },
+      pwd: {
+        required: false,
+        value: '',
+      },
+      exclude: {
+        required: false,
+        value: [],
+      },
+      depends_on: {
+        required: false,
+        value: [],
+      },
+      domains: {
+        required: false,
+        value: {},
+      },
+      command: {
+        required: false,
+        value: '',
+      },
+      volumes: {
+        required: false,
+        value: [],
+      },
+    }),
+  },
+];
 
 export function computeCostService(
   serviceSize: ServiceSize,
@@ -401,7 +594,7 @@ function getServicePosition<
   return propLines[propertyIndex] || valueLines[serviceIndex] || result;
 }
 
-function getPosition<
+export function getPosition<
   T extends keyof ConfigFile,
   K extends keyof ConfigFile['services'][0],
   D extends ConfigFile['services'][0][K],
@@ -612,10 +805,7 @@ export async function checkConfig<S extends boolean>(
           }),
         });
       }
-      /**
-       * @type {string[]}
-       */
-      const volNames = [];
+      const volNames: string[] = [];
       for (let _i = 0; volumes[_i]; _i++) {
         const _item = volumes[_i];
         const localM = _item.match(VOLUME_LOCAL_REGEX);
@@ -638,77 +828,6 @@ export async function checkConfig<S extends boolean>(
           continue;
         }
         const localPath = localM[0].replace(VOLUME_LOCAL_POSTFIX_REGEX, '');
-        fs =
-          fs !== null
-            ? fs
-            : await new Promise((_resolve) => {
-                if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
-                  getFs().then((_fs) => {
-                    _resolve(_fs);
-                  });
-                } else {
-                  _resolve(null);
-                }
-              });
-        if (fs) {
-          if (!fs.existsSync(localPath)) {
-            if (!isServer) {
-              res.push({
-                msg: `Service "${item}" has wrong volume "${_item}". Local path is not exists:`,
-                data: localPath,
-                exit: true,
-                position: getPosition({
-                  config,
-                  configText,
-                  field: 'services',
-                  service: {
-                    name: item,
-                    property: 'volumes',
-                    value: _item,
-                  },
-                }),
-              });
-            }
-          } else if (!isServer) {
-            const stats = fs.statSync(localPath);
-            if (stats.isDirectory()) {
-              res.push({
-                msg: `Service "${item}" has wrong volume "${_item}".`,
-                data: "Directory can't be a volume, only files",
-                exit: true,
-                position: getPosition({
-                  config,
-                  configText,
-                  field: 'services',
-                  service: {
-                    name: item,
-                    property: 'volumes',
-                    value: _item,
-                  },
-                }),
-              });
-            }
-            if (stats.size >= VOLUME_UPLOAD_MAX_SIZE) {
-              res.push({
-                msg: `Volume file '${localPath}' of service "${item}" is too big.`,
-                data: `Maximum size of volume file is: ${VOLUME_UPLOAD_MAX_SIZE / 1000}kb`,
-                exit: true,
-                position: getPosition({
-                  config,
-                  configText,
-                  field: 'services',
-                  service: {
-                    name: item,
-                    property: 'volumes',
-                    value: localPath,
-                  },
-                }),
-              });
-            }
-          }
-        } else {
-          log('error', 'FS is missing in checkConfig', '');
-        }
         const filename = basename(localPath);
         if (volNames.indexOf(filename) !== -1) {
           res.push({
@@ -1653,10 +1772,7 @@ export async function checkConfig<S extends boolean>(
               if (isCustomService(_type)) {
                 if (_environment) {
                   let check = false;
-                  /**
-                   * @type {string | null}
-                   */
-                  let _envVal = null;
+                  let _envVal: string | null = null;
                   _environment.forEach((___item) => {
                     const _envName = getEnvironmentName(___item);
                     if (_envName && _envName === name) {
@@ -1760,64 +1876,16 @@ export function clearRelPath(url: string) {
   return url.replace(/^\.\//, '');
 }
 
-async function getFile({ url, maxSize }: { url: string; maxSize: number }): Promise<string> {
-  return new Promise((_resolve, reject) => {
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) {
-          return reject(new Error(`HTTP error! status: ${response.status}`));
-        }
-
-        let totalBytes = 0;
-        const chunks: string[] = [];
-        const decoder = new TextDecoder();
-        const { body } = response;
-
-        if (!body) {
-          reject(new Error('Response body is unused'));
-          return;
-        }
-
-        const reader = body.getReader();
-
-        const readStream = () => {
-          reader
-            .read()
-            .then(({ done, value }) => {
-              if (done) {
-                const finalString = chunks.join('') + decoder.decode();
-                return _resolve(finalString);
-              }
-
-              totalBytes += value.length;
-              if (totalBytes > maxSize) {
-                return reject(
-                  new Error(`Response size exceeds the maximum limit of ${maxSize} bytes`)
-                );
-              }
-              chunks.push(decoder.decode(value, { stream: true }));
-              readStream();
-            })
-            .catch(reject);
-        };
-        readStream();
-      })
-      .catch(reject);
-  });
-}
-
 export async function changeConfigFileVolumes(
-  { config, userId }: { config: ConfigFile; userId: string },
-  volumes: Volumes | undefined = undefined
-): Promise<{ config: ConfigFile; volumes: Volumes | undefined; error: string | null }> {
-  const _volumes: Volumes = {};
+  { config }: { config: ConfigFile },
+  volumes: Volumes
+): Promise<{ config: ConfigFile; error: string | null }> {
   const _config = structuredClone(config);
   const { services, name } = config;
 
   if (!name) {
     return {
       config,
-      volumes,
       error: 'Project name is missing in config',
     };
   }
@@ -1825,112 +1893,24 @@ export async function changeConfigFileVolumes(
   if (!services) {
     return {
       config,
-      volumes,
       error: 'Field services is missing in config',
     };
   }
 
   const serviceKeys = Object.keys(services);
   let error: string | null = null;
-  if (!volumes) {
-    if (!userId) {
-      return {
-        config,
-        volumes,
-        error: 'User id is missing in changeVolumes',
-      };
+
+  for (let i = 0; serviceKeys[i]; i++) {
+    if (error) {
+      break;
     }
-    for (let i = 0; serviceKeys[i]; i++) {
-      if (error) {
-        break;
-      }
-      const serviceKey = serviceKeys[i];
-      const { volumes: __volumes, active } = services[serviceKey];
+    const serviceKey = serviceKeys[i];
+    const { volumes: sVolumes } = services[serviceKey];
 
-      if (!active) {
-        continue;
-      }
-
-      if (__volumes) {
-        _config.services[serviceKey].volumes = [];
-        _volumes[serviceKey] = [];
-        for (let _i = 0; __volumes[_i]; _i++) {
-          let volume = __volumes[_i];
-
-          const httpM = volume.match(/^https?:\/\//);
-          if (!httpM) {
-            _config.services[serviceKey].volumes?.push(volume);
-            continue;
-          }
-          const http = httpM[0];
-          volume = volume.replace(http, '');
-
-          const localM = volume.match(VOLUME_LOCAL_REGEX);
-          if (!localM) {
-            error = `Volume local in service "${serviceKey}" has wrong value '${volume}'`;
-            break;
-          }
-          const local = localM[0].replace(VOLUME_LOCAL_POSTFIX_REGEX, '');
-          const filenameReg = /\/?[a-zA-Z_0-9\-\\.]+$/;
-          const filenameM = local.match(filenameReg);
-          if (!filenameM) {
-            error = `Local value of volume '${volume}' has wrong filename in service "${serviceKey}"`;
-            break;
-          }
-          const filename = filenameM[0].replace(/^\//, '');
-          const remoteM = volume.match(VOLUME_REMOTE_REGEX);
-          if (!remoteM) {
-            error = `Volume remote in service "${serviceKey}" has wrong value '${volume}'`;
-            break;
-          }
-          const remote = remoteM[0].replace(VOLUME_REMOTE_PREFIX_REGEX, '');
-
-          const file = await getFile({
-            url: `${http}${local}`,
-            maxSize: VOLUME_UPLOAD_MAX_SIZE,
-          }).catch((e) => {
-            error = e.message;
-          });
-          if (file === undefined) {
-            break;
-          }
-
-          const tmpFilePath = resolve(tmpdir(), `${userId}_${name}_${serviceKey}_${filename}`);
-          fs =
-            fs !== null
-              ? fs
-              : await new Promise((_resolve) => {
-                  if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
-                    getFs().then((_fs) => {
-                      _resolve(_fs);
-                    });
-                  } else {
-                    _resolve(null);
-                  }
-                });
-          if (fs) {
-            fs.writeFileSync(tmpFilePath, file);
-          } else {
-            log('warn', 'FS is missing in changeConfigFileVolumes', '');
-          }
-          _config.services[serviceKey].volumes?.push(`${tmpFilePath}:${remote}`);
-          _volumes[serviceKey].push(`${http}${volume}`);
-        }
-      }
-    }
-  } else {
-    for (let i = 0; serviceKeys[i]; i++) {
-      if (error) {
-        break;
-      }
-      const serviceKey = serviceKeys[i];
-      const { volumes: sVolumes } = services[serviceKey];
-
-      if (sVolumes) {
-        _config.services[serviceKey].volumes = volumes[serviceKey];
-      }
+    if (sVolumes) {
+      _config.services[serviceKey].volumes = volumes[serviceKey];
     }
   }
 
-  return { config: _config, volumes: _volumes, error: null };
+  return { config: _config, error: null };
 }

@@ -9,7 +9,7 @@
  * Create Date: Tue Sep 10 2024 16:42:55 GMT+0700 (Krasnoyarsk Standard Time)
  ******************************************************************************************/
 import yaml from 'yaml';
-import { ConfigFile } from '../..';
+import type { ConfigFile } from '../../index';
 
 export function parse(text: string) {
   let data: ConfigFile | null = null;

@@ -8,7 +8,7 @@
  * Copyright: kolserdav, All rights reserved (c)
  * Create Date: Tue Sep 10 2024 16:42:55 GMT+0700 (Krasnoyarsk Standard Time)
  ******************************************************************************************/
-import { DeployData } from '../..';
+import type { DeployData } from '../../index';
 import { YAML_ORIGINAL_URL_RAW } from '../constants';
 import log from './log';
 
