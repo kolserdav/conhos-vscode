@@ -641,17 +641,15 @@ export async function checkConfig<S extends boolean>(
         fs =
           fs !== null
             ? fs
-            : typeof window === 'undefined'
-              ? await new Promise((_resolve) => {
-                  if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
-                    getFs().then((_fs) => {
-                      _resolve(_fs);
-                    });
-                  } else {
-                    _resolve(null);
-                  }
-                })
-              : null;
+            : await new Promise((_resolve) => {
+                if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
+                  getFs().then((_fs) => {
+                    _resolve(_fs);
+                  });
+                } else {
+                  _resolve(null);
+                }
+              });
         if (fs) {
           if (!fs.existsSync(localPath)) {
             if (!isServer) {
@@ -671,7 +669,7 @@ export async function checkConfig<S extends boolean>(
                 }),
               });
             }
-          } else if (!isServer && typeof window === 'undefined') {
+          } else if (!isServer) {
             const stats = fs.statSync(localPath);
             if (stats.isDirectory()) {
               res.push({
@@ -790,11 +788,11 @@ export async function checkConfig<S extends boolean>(
       });
     }
 
-    // Check service type
+    // Check service image
     if (SERVICE_TYPES.indexOf(image) === -1) {
       res.push({
         msg: `Service image "${image}" is not allowed in service ${item}`,
-        data: `Allowed service types: [${SERVICE_TYPES.join('|')}]`,
+        data: `Allowed service images: [${SERVICE_TYPES.join('|')}]`,
         exit: true,
         position: getPosition({
           config,
@@ -1901,17 +1899,15 @@ export async function changeConfigFileVolumes(
           fs =
             fs !== null
               ? fs
-              : typeof window === 'undefined'
-                ? await new Promise((_resolve) => {
-                    if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
-                      getFs().then((_fs) => {
-                        _resolve(_fs);
-                      });
-                    } else {
-                      _resolve(null);
-                    }
-                  })
-                : null;
+              : await new Promise((_resolve) => {
+                  if (typeof window === 'undefined' && process.env.APP_PORT === undefined) {
+                    getFs().then((_fs) => {
+                      _resolve(_fs);
+                    });
+                  } else {
+                    _resolve(null);
+                  }
+                });
           if (fs) {
             fs.writeFileSync(tmpFilePath, file);
           } else {
