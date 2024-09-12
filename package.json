@@ -24,6 +24,7 @@
   },
   "files": [
     "dist",
+    "dist-web",
     "index.d.ts"
   ],
   "scripts": {
