@@ -5,3 +5,5 @@ conhos.yml
 
 /out/*
 !/out/.gitkeep
+
+dist-web

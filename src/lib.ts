@@ -46,7 +46,6 @@ import {
   VOLUME_REMOTE_PREFIX_REGEX,
   VOLUME_REMOTE_REGEX,
 } from './constants';
-import { basename, isAbsolute } from 'path';
 
 type ConfigServerDefault<O extends Server> = {
   [K in keyof Required<O>]: {
@@ -2104,4 +2103,21 @@ export async function changeConfigFileVolumes(
   }
 
   return { config: _config, error: null };
+}
+
+function basename(filePath: string) {
+  return filePath.split('/').pop() || filePath;
+}
+
+function isAbsolute(filePath: string) {
+  if (filePath.startsWith('/')) {
+    return true;
+  }
+
+  const windowsAbsolutePathPattern = /^[a-zA-Z]:\\/;
+  if (windowsAbsolutePathPattern.test(filePath)) {
+    return true;
+  }
+
+  return filePath.startsWith('http://') || filePath.startsWith('https://');
 }

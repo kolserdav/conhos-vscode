@@ -9,3 +9,4 @@ eslint.config.js
 conhos.yml
 tsconfig.json
 types.d.ts
+dist-web

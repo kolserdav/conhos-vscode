@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+      "target": "es6",
+      "module": "esnext",
+      "strict": true,
+      "outDir": "./dist-web",
+      "declaration": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/lib.ts"]
+}

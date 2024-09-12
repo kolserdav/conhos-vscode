@@ -28,7 +28,9 @@
   ],
   "scripts": {
     "dev": "webpack --mode development --watch",
-    "prebuild": "rimraf dist/* && webpack --mode production",
+    "dev:web": "webpack -c webpack.config.web.js --mode development --watch",
+    "prebuild": "rimraf dist/* && webpack --mode production && npm run build:web",
+    "build:web": "rimraf dist-web/* && webpack -c webpack.config.web.js --mode production",
     "scripts": "node ./dist/scripts.js",
     "package": "vsce package -o out",
     "deploy": "vsce publish ${version} --pat $(cat .azure-dev-api-key)",
