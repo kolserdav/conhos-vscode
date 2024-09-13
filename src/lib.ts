@@ -889,7 +889,7 @@ function checkRequiredParams({
 
 export async function checkConfig<S extends boolean>(
   { config, configText }: { config: ConfigFile; configText: string },
-  { deployData, isServer }: { deployData: DeployData; isServer: S }
+  { deployData }: { deployData: DeployData }
 ): Promise<CheckConfigResult[]> {
   const { services, server } = config;
   let res: CheckConfigResult[] = [];

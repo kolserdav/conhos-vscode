@@ -117,7 +117,7 @@ documents.onDidChangeContent(async (change) => {
     return;
   }
 
-  const checkResult = await checkConfig({ config, configText }, { deployData, isServer: true });
+  const checkResult = await checkConfig({ config, configText }, { deployData });
 
   for (let i = 0; checkResult[i]; i++) {
     const {
