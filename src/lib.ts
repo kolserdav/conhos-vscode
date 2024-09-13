@@ -2106,7 +2106,7 @@ export async function changeConfigFileVolumes(
 }
 
 function basename(filePath: string) {
-  return filePath.split('/').pop() || filePath;
+  return filePath.split(/[/\\]/).pop() || filePath;
 }
 
 function isAbsolute(filePath: string) {
