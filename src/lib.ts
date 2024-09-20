@@ -14,6 +14,7 @@ import type {
   DeployData,
   Git,
   GitType,
+  ParsedGitRepo,
   Port,
   PortStatic,
   Server,
@@ -2033,12 +2034,7 @@ export function checkGitType(url: string): GitType | null {
 }
 
 export function cleanGitPostfix(url: string) {
-  return url.replace(/\.git/, '');
-}
-
-interface ParsedGitRepo {
-  user: string;
-  project: string;
+  return url.replace(/\.git$/, '');
 }
 
 export function parseGitUrl(url: string): ParsedGitRepo | null {

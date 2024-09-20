@@ -134,6 +134,11 @@ export interface UploadFileBody {
   chunk: string | Buffer;
 }
 
+export interface ParsedGitRepo {
+  user: string;
+  project: string;
+}
+
 export interface WSMessageDataCli {
   any: any;
   setSocketCli: {
@@ -185,6 +190,7 @@ export interface WSMessageDataCli {
   };
   deployGitCli: {
     service: string;
+    active: boolean;
     last: boolean;
   };
   deployEndServer: {
