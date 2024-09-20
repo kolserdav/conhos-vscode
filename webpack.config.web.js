@@ -1,3 +1,13 @@
+/******************************************************************************************
+ * Repository: Conhos vscode
+ * File name: webpack.config.web.js
+ * Author: Sergey Kolmiller
+ * Email: <kolserdav@conhos.ru>
+ * License: MIT
+ * License text: See LICENSE file
+ * Copyright: kolserdav, All rights reserved (c)
+ * Create Date: Fri Sep 20 2024 13:22:00 GMT+0700 (Krasnoyarsk Standard Time)
+ ******************************************************************************************/
 // @ts-check
 const path = require('path');
 const TerserPlugin = require('terser-webpack-plugin');

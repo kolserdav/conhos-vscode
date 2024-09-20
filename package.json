@@ -95,13 +95,16 @@
     "yaml": "^2.5.1"
   },
   "fhead": {
-    "root": "src",
+    "root": "./",
     "repository": "Conhos vscode",
     "patterns": [
-      ".ts"
+      ".ts",
+      ".js"
     ],
     "exclude": [
-      "node_modules"
+      "node_modules",
+      "dist",
+      "dist-web"
     ],
     "name": "Sergey Kolmiller",
     "email": "kolserdav@conhos.ru",
