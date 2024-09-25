@@ -10,6 +10,8 @@
  ******************************************************************************************/
 import type { CacheItem } from 'cache-changed';
 
+export type ServiceTarget = 'common' | 'custom' | 'admin';
+
 export type ServiceTypeCustom = 'node' | 'rust' | 'python' | 'golang' | 'php';
 
 export type ServiceTypeCommon =
@@ -22,9 +24,15 @@ export type ServiceTypeCommon =
   | 'rabbitmq'
   | 'phpmyadmin'
   | 'pgadmin'
-  | 'mongo_express';
+  | 'mongo_express'
+  | 'ftp';
 
-export type ServiceTypeCommonPublic = 'adminer' | 'phpmyadmin' | 'pgadmin' | 'mongo_express';
+export type ServiceTypeCommonPublic =
+  | 'adminer'
+  | 'phpmyadmin'
+  | 'pgadmin'
+  | 'mongo_express'
+  | 'ftp';
 
 export type ServiceType = ServiceTypeCommon | ServiceTypeCustom;
 
@@ -38,6 +46,8 @@ export type ServiceSize =
   | 'deca'
   | 'hecto'
   | 'kilo';
+
+export type RequiredDependsOn = Partial<Record<ServiceType, { types: ServiceTarget[] }>>;
 
 export type PortType = 'http' | 'ws' | 'chunked' | 'php';
 
@@ -94,6 +104,7 @@ export interface ConfigFile {
       image: ServiceType;
       size: ServiceSize;
       version: string;
+      entrypoint?: string[];
       no_restart?: boolean;
       pwd?: string;
       git?: Git;

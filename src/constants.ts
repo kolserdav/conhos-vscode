@@ -13,6 +13,7 @@ import type {
   GitUntrackedPolicy,
   Port,
   PortType,
+  RequiredDependsOn,
   ServiceType,
   ServiceTypeCommon,
   ServiceTypeCommonPublic,
@@ -70,6 +71,7 @@ export const ENVIRONMENT_REQUIRED_COMMON: Record<ServiceTypeCommon, string[]> = 
     'ME_CONFIG_MONGODB_AUTH_USERNAME',
     'ME_CONFIG_MONGODB_AUTH_PASSWORD',
   ],
+  ftp: ['FTP_USER_NAME', 'FTP_USER_PASS'],
 };
 
 export const SERVICES_CUSTOM: ServiceTypeCustom[] = ['node', 'rust', 'python', 'golang', 'php'];
@@ -85,6 +87,7 @@ export const SERVICES_COMMON: ServiceTypeCommon[] = [
   'phpmyadmin',
   'pgadmin',
   'mongo_express',
+  'ftp',
 ];
 
 export const SERVICES_COMMON_PUBLIC: ServiceTypeCommonPublic[] = [
@@ -92,7 +95,14 @@ export const SERVICES_COMMON_PUBLIC: ServiceTypeCommonPublic[] = [
   'phpmyadmin',
   'pgadmin',
   'mongo_express',
+  'ftp',
 ];
+
+export const REQUIRED_DEPENDS_ON: RequiredDependsOn = {
+  ftp: {
+    types: ['common', 'custom', 'admin'],
+  },
+};
 
 export const SERVICE_TYPES: ServiceType[] = (SERVICES_COMMON as any[]).concat(SERVICES_CUSTOM);
 

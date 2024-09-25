@@ -38,6 +38,7 @@ import {
   GIT_UNTRACKED_POLICY,
   PORT_TYPES,
   PWD_DEFAULT,
+  REQUIRED_DEPENDS_ON,
   SERVICE_TYPES,
   SERVICES_COMMON,
   SERVICES_COMMON_PUBLIC,
@@ -168,6 +169,10 @@ export const CONFIG_DEFAULT = {
       version: {
         required: true,
         value: 'latest',
+      },
+      entrypoint: {
+        required: false,
+        value: [],
       },
       git: {
         required: false,
@@ -590,7 +595,7 @@ function getServicePosition<
                       }
                     });
                   } else {
-                    log('warn', 'Unexpected case 593', obj);
+                    // log('warn', 'Unexpected case 593', obj);
                   }
                 });
               } else if (typeof services[name][property] === 'object') {
@@ -954,6 +959,26 @@ export async function checkConfig<S extends boolean>(
       volumes,
       git,
     } = services[item];
+
+    // Check required depends on
+    if (REQUIRED_DEPENDS_ON[image] && !depends_on) {
+      res.push({
+        msg: `Property 'depends_on' is required for service "${item}"`,
+        data: "Add 'depends_on' property with other service name",
+        exit: true,
+        position: getPosition({
+          config,
+          configText,
+          field: 'services',
+          service: {
+            name: item,
+            property: null,
+            value: null,
+          },
+        }),
+      });
+      return res;
+    }
 
     // Check volumes
     if (volumes && active) {
