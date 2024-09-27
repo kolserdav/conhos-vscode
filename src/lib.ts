@@ -38,6 +38,7 @@ import {
   GIT_UNTRACKED_POLICY,
   PORT_TYPES,
   PWD_DEFAULT,
+  REGEXP_IS_DOMAIN,
   REQUIRED_DEPENDS_ON,
   SERVICE_TYPES,
   SERVICES_COMMON,
@@ -310,6 +311,10 @@ export const isCustomService = (type: ServiceType): ServiceTypeCustom | null => 
   const res = SERVICES_CUSTOM.findIndex((item) => item === type);
   return res === -1 ? null : (type as ServiceTypeCustom);
 };
+
+export function isDomain(domain: string) {
+  return REGEXP_IS_DOMAIN.test(domain.trim());
+}
 
 export const isCommonService = (type: ServiceType): ServiceTypeCommon | null => {
   const _type = type as ServiceTypeCommon;
@@ -1996,24 +2001,6 @@ export async function checkConfig<S extends boolean>(
                       _envVal = getEnvironmentValue(___item);
                     }
                   });
-
-                  if (!check && name !== ENVIRONMENT_SWITCH.mysql.rootPassword) {
-                    res.push({
-                      msg: `Service "${item}" provided ${name}, but in a service ${__item} dependent on it is not provided`,
-                      data: `Try to add environment variable ${name} to the service ${__item}`,
-                      exit: false,
-                      position: getPosition({
-                        config,
-                        configText,
-                        field: 'services',
-                        service: {
-                          name: item,
-                          property: 'environment',
-                          value: name,
-                        },
-                      }),
-                    });
-                  }
                   if (value !== _envVal && check) {
                     res.push({
                       msg: `Service "${item}" provided ${name}, but in a service ${__item} dependent on it this variable value is not the same`,
