@@ -116,13 +116,6 @@ export const GIT_TYPES: GitType[] = ['github', 'gitlab'];
 
 const DEFAULT_WS_ADDRESS = 'wss://ws.conhos.ru';
 export const WEBSOCKET_ADDRESS = process.env.WEBSOCKET_ADDRESS || DEFAULT_WS_ADDRESS;
-if (DEFAULT_WS_ADDRESS !== WEBSOCKET_ADDRESS && process.env.NODE_ENV === 'production') {
-  console.warn(
-    'warn',
-    'Default websocket address have changed by WEBSOCKET_ADDRESS to:',
-    process.env.WEBSOCKET_ADDRESS
-  );
-}
 
 export const HEADER_CONN_ID = 'conn-id';
 export const HEADER_TARBALL = 'tar';
