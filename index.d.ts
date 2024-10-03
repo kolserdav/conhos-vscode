@@ -278,6 +278,13 @@ export interface WSMessageDataCli {
   ipCli: {
     ip: string;
   };
+  execServer: {
+    project: string;
+    service: string;
+  };
+  execCli: {
+    url: string;
+  };
 }
 
 export interface CheckConfigResult {
