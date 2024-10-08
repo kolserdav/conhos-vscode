@@ -189,6 +189,7 @@ export interface WSMessageDataCli {
     configText: string;
     volumes: Volumes;
     interractive: boolean;
+    ssl: boolean;
   };
   deployPrepareVolumeUploadCli: {
     url: string;
@@ -287,6 +288,17 @@ export interface WSMessageDataCli {
   };
 }
 
+export interface WSMessageCli<T extends keyof WSMessageDataCli> {
+  status: Status;
+  type: T;
+  packageName: string;
+  message: string;
+  userId: string;
+  data: WSMessageDataCli[T];
+  token: string | null;
+  connId: string;
+}
+
 export interface CheckConfigResult {
   msg: string;
   data: string;
@@ -297,17 +309,6 @@ export interface CheckConfigResult {
     columnStart: number;
     columnEnd: number;
   };
-}
-
-export interface WSMessageCli<T extends keyof WSMessageDataCli> {
-  status: Status;
-  type: T;
-  packageName: string;
-  message: string;
-  userId: string;
-  data: WSMessageDataCli[T];
-  token: string | null;
-  connId: string;
 }
 
 export type ConfigFileBackend = Omit<ConfigFile, 'services'> & {
