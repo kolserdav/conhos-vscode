@@ -34,7 +34,12 @@ export async function activate(context: vscode.ExtensionContext) {
   };
 
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: 'file', language: 'yaml' }],
+    documentSelector: [
+      { scheme: 'file', language: 'yaml', pattern: '**/conhos.yaml' },
+      { scheme: 'file', language: 'yaml', pattern: '**/conhos.yml' },
+      { scheme: 'file', language: 'yaml', pattern: '**/*.conhos.yaml' },
+      { scheme: 'file', language: 'yaml', pattern: '**/*.conhos.yml' },
+    ],
     synchronize: {
       fileEvents: vscode.workspace.createFileSystemWatcher('*conhos.y(a)ml'),
     },

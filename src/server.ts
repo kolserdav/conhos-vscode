@@ -24,11 +24,14 @@ import log from './utils/log';
 import { getMedialplan } from './utils/request';
 import { SOURCE } from './constants';
 import { checkConfig } from './lib';
+import { DeployData } from '..';
 
 const source = SOURCE;
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
+
+let deployData: DeployData | null = null;
 
 let hasConfigurationCapability: boolean = false;
 let hasWorkspaceFolderCapability: boolean = false;
@@ -68,7 +71,7 @@ connection.onInitialize((params: InitializeParams) => {
 
 // Only keep settings for open documents
 documents.onDidClose((e) => {
-  log('error', 'Server was closed', e);
+  log('warn', 'Server was closed');
   documentSettings.delete(e.document.uri);
 });
 
@@ -80,6 +83,10 @@ connection.onDidChangeWatchedFiles((_change) => {
 documents.onDidChangeContent(async (change) => {
   const diagnostics: Diagnostic[] = [];
   const document = documents.get(change.document.uri);
+
+  if (!isConhosFile(change.document.uri)) {
+    return;
+  }
 
   if (!document) {
     log('warn', 'Document is missing', document);
@@ -102,7 +109,6 @@ documents.onDidChangeContent(async (change) => {
     return;
   }
 
-  const deployData = await getMedialplan();
   if (!deployData) {
     diagnostics.push({
       severity: DiagnosticSeverity.Error,
@@ -140,10 +146,17 @@ documents.onDidChangeContent(async (change) => {
   connection.sendDiagnostics({ uri: change.document.uri, diagnostics });
 });
 
-documents.onDidOpen((event) => {
+documents.onDidOpen(async (event) => {
+  if (isConhosFile(event.document.uri) && !deployData) {
+    deployData = await getMedialplan();
+  }
   console.log('Document opened:', event.document.uri);
 });
 
 documents.listen(connection);
 
 connection.listen();
+
+function isConhosFile(uri: string) {
+  return /\.?conhos\.ya?ml$/.test(uri);
+}
