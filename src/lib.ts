@@ -24,8 +24,6 @@ import type {
   ServiceTypeCommonPublic,
   ServiceTypeCustom,
   Volumes,
-  WSMessageCli,
-  WSMessageDataCli,
 } from '../index';
 import log from './utils/log';
 import {
@@ -271,7 +269,7 @@ export const CONFIG_DEFAULT = {
 
 export function computeCostService(
   serviceSize: ServiceSize,
-  { sizes, baseCost, baseValue }: Omit<WSMessageDataCli['deployData'], 'services' | 'nodePublic'>
+  { sizes, baseCost, baseValue }: Omit<DeployData, 'services' | 'nodePublic'>
 ) {
   const SHIFT_PRICE_COEFF = 1.3;
   const index = sizes.findIndex((item) => item.name === serviceSize);
@@ -292,18 +290,6 @@ export function computeCostService(
   const hour = month / 30 / 24;
   const minute = hour / 60;
   return { month, hour, minute };
-}
-
-export function parseMessageCli<T extends keyof WSMessageDataCli>(
-  msg: string
-): WSMessageCli<T> | null {
-  let data = null;
-  try {
-    data = JSON.parse(msg);
-  } catch (e) {
-    log('error', 'Failed parse message', e);
-  }
-  return data;
 }
 
 export const isCustomService = (type: ServiceType): ServiceTypeCustom | null => {
