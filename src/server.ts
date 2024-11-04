@@ -110,17 +110,20 @@ documents.onDidChangeContent(async (change) => {
   }
 
   if (!deployData) {
-    diagnostics.push({
-      severity: DiagnosticSeverity.Error,
-      range: {
-        start: { line: 0, character: 0 },
-        end: { line: 0, character: 5 },
-      },
-      message: 'Failed to conect to server. Check network connection and try again.',
-      source,
-    });
-    connection.sendDiagnostics({ uri: change.document.uri, diagnostics });
-    return;
+    deployData = await getMedialplan();
+    if (!deployData) {
+      diagnostics.push({
+        severity: DiagnosticSeverity.Error,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+        },
+        message: 'Failed to conect to server. Check network connection and try again.',
+        source,
+      });
+      connection.sendDiagnostics({ uri: change.document.uri, diagnostics });
+      return;
+    }
   }
 
   const checkResult = await checkConfig({ config, configText }, { deployData });
