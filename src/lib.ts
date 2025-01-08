@@ -27,7 +27,10 @@ import type {
 } from '../index';
 import log from './utils/log';
 import {
+  ALLOWED_HTTP_VERSIONS,
+  ALLOWED_ON_OFFS,
   BUFFER_SIZE_MAX,
+  CLIENT_BODY_SIZE_MAX,
   COUNT_OF_VOLUMES_MAX,
   DOMAIN_MAX_LENGTH,
   ENVIRONMENT_REQUIRED_COMMON,
@@ -231,10 +234,6 @@ export const CONFIG_DEFAULT = {
           http_version: {
             required: false,
             value: '1.0',
-          },
-          connect_timeout: {
-            required: false,
-            value: '60s',
           },
           client_max_body_size: {
             required: false,
@@ -547,7 +546,6 @@ function getServicePosition<
                     propertyIndex = serviceIndex;
                   }
                 } else {
-                  console.log(2, propField);
                   if (
                     // @ts-ignore
                     services[item][_value as keyof ConfigFile['services'][0]][propField] !==
@@ -1451,7 +1449,21 @@ export async function checkConfig<S extends boolean>(
       }
 
       (ports || []).forEach(
-        ({ port, type: _type, pathname, timeout, buffer_size, static: _static, proxy_path }) => {
+        ({
+          port,
+          type: _type,
+          pathname,
+          timeout,
+          buffer_size,
+          static: _static,
+          proxy_path,
+          client_max_body_size,
+          http_version,
+          request_buffering,
+          buffering,
+          headers,
+          ws,
+        }) => {
           // Check timeout
           if (timeout) {
             if (_type !== 'proxy') {
@@ -1585,6 +1597,286 @@ export async function checkConfig<S extends boolean>(
                   }
                 }
               }
+            }
+          }
+          // Check client_max_body_size
+          if (client_max_body_size) {
+            if (_type !== 'proxy') {
+              res.push({
+                msg: `Client max body size for port "${port}" of service "${item}" doesn't have any effect`,
+                data: `Client max body size doesn't allow for port type "${_type}"`,
+                exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      client_max_body_size,
+                    },
+                  },
+                }),
+              });
+            } else {
+              const bufferStr = client_max_body_size.toString();
+              if (!/^[0-9]+m$/.test(bufferStr)) {
+                res.push({
+                  msg: `Client max body size for port "${port}" of service "${item}" must be a string`,
+                  data: `For example "4m", received "${client_max_body_size}"`,
+                  exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        client_max_body_size,
+                      },
+                    },
+                  }),
+                });
+              } else {
+                const prefix = bufferStr.match(/^[0-9]+/);
+                if (prefix) {
+                  const num = parseInt(prefix[0], 10);
+                  if (num > CLIENT_BODY_SIZE_MAX) {
+                    res.push({
+                      msg: `Client max body size for port "${port}" of service "${item}" is not allowed`,
+                      data: `Maximmum allowed is "${CLIENT_BODY_SIZE_MAX}m", received "${num}m"`,
+                      exit: true,
+                      position: getPosition({
+                        config,
+                        configText,
+                        field: 'services',
+                        service: {
+                          name: item,
+                          property: 'ports',
+                          value: {
+                            client_max_body_size,
+                          },
+                        },
+                      }),
+                    });
+                  }
+                }
+              }
+            }
+          }
+          // Check http_version
+          if (http_version) {
+            if (_type !== 'proxy') {
+              res.push({
+                msg: `HTTP version for port "${port}" of service "${item}" doesn't have any effect`,
+                data: `HTTP version property doesn't allow for port type "${_type}"`,
+                exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      http_version,
+                    },
+                  },
+                }),
+              });
+            } else {
+              if (ALLOWED_HTTP_VERSIONS.indexOf(http_version) === -1) {
+                res.push({
+                  msg: `Not allowed HTTP version for port "${port}" of service "${item}"`,
+                  data: `Allowed HTTP versions "${ALLOWED_HTTP_VERSIONS.join('|')}", received "${http_version}"`,
+                  exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        http_version,
+                      },
+                    },
+                  }),
+                });
+              }
+            }
+          }
+          // Check request_buffering
+          if (request_buffering) {
+            if (_type !== 'proxy') {
+              res.push({
+                msg: `Request buffering for port "${port}" of service "${item}" doesn't have any effect`,
+                data: `Request buffering property doesn't allow for port type "${_type}"`,
+                exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      request_buffering,
+                    },
+                  },
+                }),
+              });
+            } else {
+              if (ALLOWED_ON_OFFS.indexOf(request_buffering) === -1) {
+                res.push({
+                  msg: `Not allowed request buffering value for port "${port}" of service "${item}"`,
+                  data: `Allowed request buffering values "${ALLOWED_ON_OFFS.join('|')}", received "${request_buffering}"`,
+                  exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        request_buffering,
+                      },
+                    },
+                  }),
+                });
+              }
+            }
+          }
+          // Check buffering
+          if (buffering) {
+            if (_type !== 'proxy') {
+              res.push({
+                msg: `Buffering for port "${port}" of service "${item}" doesn't have any effect`,
+                data: `Buffering property doesn't allow for port type "${_type}"`,
+                exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      buffering,
+                    },
+                  },
+                }),
+              });
+            } else {
+              if (ALLOWED_ON_OFFS.indexOf(buffering) === -1) {
+                res.push({
+                  msg: `Not allowed buffering value for port "${port}" of service "${item}"`,
+                  data: `Allowed buffering values "${ALLOWED_ON_OFFS.join('|')}", received "${buffering}"`,
+                  exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        buffering,
+                      },
+                    },
+                  }),
+                });
+              }
+            }
+          }
+          // Check ws
+          if (ws) {
+            if (_type !== 'proxy') {
+              res.push({
+                msg: `WS for port "${port}" of service "${item}" doesn't have any effect`,
+                data: `WS property doesn't allow for port type "${_type}"`,
+                exit: false,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      ws,
+                    },
+                  },
+                }),
+              });
+            } else {
+              if (typeof ws !== 'boolean') {
+                res.push({
+                  msg: `Not allowed 'ws' value for port "${port}" of service "${item}"`,
+                  data: `Property 'ws' must be of type "boolean", received "${typeof ws}"`,
+                  exit: true,
+                  position: getPosition({
+                    config,
+                    configText,
+                    field: 'services',
+                    service: {
+                      name: item,
+                      property: 'ports',
+                      value: {
+                        ws,
+                      },
+                    },
+                  }),
+                });
+              }
+            }
+          }
+          // Check headers
+          if (headers) {
+            if (typeof headers !== 'object') {
+              res.push({
+                msg: `Not allowed 'headers' for port "${port}" of service "${item}"`,
+                data: `Propery 'headers' must be of type "object", received "${typeof headers}"`,
+                exit: true,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      headers,
+                    },
+                  },
+                }),
+              });
+            } else {
+              Object.keys(headers).forEach((key) => {
+                const value = headers[key];
+                if (typeof value !== 'string') {
+                  res.push({
+                    msg: `Not allowed header for port "${port}" of service "${item}"`,
+                    data: `Value for header '${key}' must be of type string, received "${typeof value}": '${value}'`,
+                    exit: true,
+                    position: getPosition({
+                      config,
+                      configText,
+                      field: 'services',
+                      service: {
+                        name: item,
+                        property: 'ports',
+                        value: {
+                          headers,
+                        },
+                      },
+                    }),
+                  });
+                }
+              });
             }
           }
           // Check port

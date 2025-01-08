@@ -68,21 +68,20 @@ export interface PortStatic {
 export type PortHTTPVersion = '1.0' | '1.1';
 export type PortOnOff = 'on' | 'off';
 
-export interface Port {
+export interface Port<T extends PortType = PortType> {
   port: number;
-  type: PortType;
-  pathname?: string;
-  timeout?: string;
-  buffer_size?: string;
-  proxy_path?: string;
-  request_buffering?: PortOnOff;
-  buffering?: PortOnOff;
-  http_version?: PortHTTPVersion;
-  connect_timeout?: string;
+  type: T;
+  pathname?: T extends 'proxy' ? string : undefined;
+  timeout?: T extends 'proxy' ? string : undefined;
+  buffer_size?: T extends 'proxy' ? string : undefined;
+  proxy_path?: T extends 'proxy' ? string : undefined;
+  request_buffering?: T extends 'proxy' ? PortOnOff : undefined;
+  buffering?: T extends 'proxy' ? PortOnOff : undefined;
+  http_version?: T extends 'proxy' ? PortHTTPVersion : undefined;
   headers?: Record<string, string>;
-  static?: PortStatic[];
-  ws?: boolean;
-  client_max_body_size?: string;
+  static?: T extends 'proxy' ? PortStatic[] : undefined;
+  ws?: T extends 'proxy' ? boolean : undefined;
+  client_max_body_size?: T extends 'proxy' ? string : undefined;
 }
 
 export interface NewDomains {

@@ -12,6 +12,8 @@ import type {
   GitType,
   GitUntrackedPolicy,
   Port,
+  PortHTTPVersion,
+  PortOnOff,
   PortType,
   RequiredDependsOn,
   ServiceType,
@@ -33,6 +35,12 @@ export const VOLUME_UPLOAD_MAX_SIZE = 100000;
 export const ERROR_LOG_PREFIX = 'error:';
 
 export const BUFFER_SIZE_MAX = 512;
+
+export const CLIENT_BODY_SIZE_MAX = 16;
+
+export const ALLOWED_HTTP_VERSIONS: PortHTTPVersion[] = ['1.0', '1.1'];
+
+export const ALLOWED_ON_OFFS: PortOnOff[] = ['on', 'off'];
 
 export const PWD_DEFAULT = './';
 
