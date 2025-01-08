@@ -1975,6 +1975,26 @@ export async function checkConfig<S extends boolean>(
           }
           // Check port static
           if (_static) {
+            if (!Array.isArray(_static)) {
+              res.push({
+                msg: `Static must be an array in service "${item}"`,
+                data: '',
+                exit: true,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      static: [],
+                    },
+                  },
+                }),
+              });
+              return res;
+            }
             _static.forEach(({ path, location: _location, index }) => {
               if (!_location) {
                 res.push({
