@@ -128,14 +128,12 @@ export const REGEXP_IS_DOMAIN = /[a-zA-Z0-9\\-]+\.[a-zA-Z0-9]+$/;
 
 export const PORT_DEFAULT: Port = {
   port: 3000,
-  type: 'http',
+  type: 'proxy',
 };
 
 const _PORT_TYPES: Record<PortType, PortType> = {
-  http: 'http',
+  proxy: 'proxy',
   php: 'php',
-  chunked: 'chunked',
-  ws: 'ws',
 };
 
 export const PORT_TYPES: PortType[] = Object.keys(_PORT_TYPES) as PortType[];

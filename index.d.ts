@@ -48,7 +48,7 @@ export type ServiceSize =
 
 export type RequiredDependsOn = Partial<Record<ServiceType, { types: ServiceTarget[] }>>;
 
-export type PortType = 'http' | 'ws' | 'chunked' | 'php';
+export type PortType = 'proxy' | 'php';
 
 export type GitUntrackedPolicy = 'checkout' | 'push' | 'merge';
 
@@ -65,6 +65,9 @@ export interface PortStatic {
   index?: string;
 }
 
+export type PortHTTPVersion = '1.0' | '1.1';
+export type PortOnOff = 'on' | 'off';
+
 export interface Port {
   port: number;
   type: PortType;
@@ -72,7 +75,14 @@ export interface Port {
   timeout?: string;
   buffer_size?: string;
   proxy_path?: string;
+  request_buffering?: PortOnOff;
+  buffering?: PortOnOff;
+  http_version?: PortHTTPVersion;
+  connect_timeout?: string;
+  headers?: Record<string, string>;
   static?: PortStatic[];
+  ws?: boolean;
+  client_max_body_size?: string;
 }
 
 export interface NewDomains {

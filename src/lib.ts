@@ -198,7 +198,7 @@ export const CONFIG_DEFAULT = {
           },
           type: {
             required: true,
-            value: 'http',
+            value: 'proxy',
           },
           proxy_path: {
             required: false,
@@ -215,6 +215,34 @@ export const CONFIG_DEFAULT = {
           buffer_size: {
             required: false,
             value: '',
+          },
+          ws: {
+            required: false,
+            value: false,
+          },
+          request_buffering: {
+            required: false,
+            value: 'on',
+          },
+          buffering: {
+            required: false,
+            value: 'on',
+          },
+          http_version: {
+            required: false,
+            value: '1.0',
+          },
+          connect_timeout: {
+            required: false,
+            value: '60s',
+          },
+          client_max_body_size: {
+            required: false,
+            value: '1m',
+          },
+          headers: {
+            required: false,
+            value: {},
           },
           static: {
             required: false,
@@ -1426,7 +1454,7 @@ export async function checkConfig<S extends boolean>(
         ({ port, type: _type, pathname, timeout, buffer_size, static: _static, proxy_path }) => {
           // Check timeout
           if (timeout) {
-            if (_type !== 'chunked' && _type !== 'ws') {
+            if (_type !== 'proxy') {
               res.push({
                 msg: `Timeout for port "${port}" of service "${item}" doesn't have any effect`,
                 data: `Timeout property doesn't allow for port type "${_type}"`,
@@ -1494,7 +1522,7 @@ export async function checkConfig<S extends boolean>(
           }
           // Check buffer_size
           if (buffer_size) {
-            if (_type !== 'chunked') {
+            if (_type !== 'proxy') {
               res.push({
                 msg: `Buffer size for port "${port}" of service "${item}" doesn't have any effect`,
                 data: `Buffer size property doesn't allow for port type "${_type}"`,
