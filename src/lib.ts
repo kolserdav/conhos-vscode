@@ -611,7 +611,18 @@ function getServicePosition<
                       }
                     });
                   } else {
-                    // log('warn', 'Unexpected case 593', obj);
+                    lines.forEach((_line, _lineNumber) => {
+                      const propertyM = _line.match(createPropertyRegex(obj));
+                      if (propertyM) {
+                        const columnStart = getColumnStart(propertyM, obj);
+                        propLines.push({
+                          lineStart: _lineNumber,
+                          lineEnd: _lineNumber,
+                          columnStart,
+                          columnEnd: propertyM[0].length,
+                        });
+                      }
+                    });
                   }
                 });
               } else if (typeof services[name][property] === 'object') {
@@ -861,11 +872,12 @@ function checkRequiredParams({
         Object.keys(services).forEach((serviceKey) => {
           const service = services[serviceKey];
           Object.keys(service).forEach((servicePropKey) => {
-            if (
+            const defVal =
               CONFIG_DEFAULT.services.value[
                 servicePropKey as keyof typeof CONFIG_DEFAULT.services.value
-              ] === undefined
-            ) {
+              ]?.value;
+            // Check unavailabe for service level
+            if (defVal === undefined) {
               res.push({
                 msg: `Parameter "${servicePropKey}" has no any effects in service "${serviceKey}"`,
                 data: '',
@@ -881,6 +893,96 @@ function checkRequiredParams({
                   },
                 }),
               });
+            } else {
+              const obj = service[servicePropKey as keyof typeof service];
+              if (typeof obj === 'object') {
+                // Check unavailable for service[subPropKey] level
+                if (!Array.isArray(obj)) {
+                  if (!obj) {
+                    return;
+                  }
+                  Object.keys(obj).forEach((subPropKey) => {
+                    if (defVal[subPropKey as keyof typeof defVal] === undefined) {
+                      res.push({
+                        msg: `Parameter '${subPropKey}' has no any effects in "${serviceKey}.${servicePropKey}"`,
+                        data: '',
+                        exit: false,
+                        position: getPosition({
+                          config,
+                          configText,
+                          field: 'services',
+                          service: {
+                            name: serviceKey,
+                            property: subPropKey as keyof ConfigFile['services'][0],
+                            value: null,
+                          },
+                        }),
+                      });
+                    }
+                  });
+                } else {
+                  obj.forEach((item) => {
+                    if (typeof item === 'object') {
+                      if (!item) {
+                        return;
+                      }
+                      Object.keys(item).forEach((subPropKey) => {
+                        const subValDef: any = defVal[subPropKey as keyof typeof defVal];
+                        if (subValDef === undefined) {
+                          res.push({
+                            msg: `Parameter '${subPropKey}' has no any effects in "${serviceKey}.${servicePropKey}"`,
+                            data: '',
+                            exit: false,
+                            position: getPosition({
+                              config,
+                              configText,
+                              field: 'services',
+                              service: {
+                                name: serviceKey,
+                                property: subPropKey as keyof ConfigFile['services'][0],
+                                value: null,
+                              },
+                            }),
+                          });
+                        } else {
+                          const _item = item[subPropKey as keyof typeof item];
+                          if (typeof _item === 'object') {
+                            if (Array.isArray(_item)) {
+                              _item.forEach((__item) => {
+                                if (typeof __item === 'object') {
+                                  if (!Array.isArray(__item)) {
+                                    Object.keys(__item).forEach((subSubPropKey) => {
+                                      // Check awailable for service[subPropKey][subSubPropKey] level
+                                      if (subValDef.value[subSubPropKey] === undefined) {
+                                        res.push({
+                                          msg: `Parameter '${subSubPropKey}' has no any effects in "${serviceKey}.${servicePropKey}.${subPropKey}"`,
+                                          data: '',
+                                          exit: false,
+                                          position: getPosition({
+                                            config,
+                                            configText,
+                                            field: 'services',
+                                            service: {
+                                              name: serviceKey,
+                                              property:
+                                                subSubPropKey as keyof ConfigFile['services'][0],
+                                              value: null,
+                                            },
+                                          }),
+                                        });
+                                      }
+                                    });
+                                  }
+                                }
+                              });
+                            }
+                          }
+                        }
+                      });
+                    }
+                  });
+                }
+              }
             }
           });
         });
