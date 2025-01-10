@@ -16,15 +16,17 @@ import {
   Diagnostic,
   TextDocumentSyncKind,
   InitializeResult,
-  InitializeParams,
+  TextDocumentPositionParams,
+  CompletionItem,
 } from 'vscode-languageserver/node';
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { parse } from './utils/yaml';
-import log from './utils/log';
-import { getMedialplan } from './utils/request';
-import { SOURCE } from './constants';
-import { checkConfig } from './lib';
-import { DeployData } from '..';
+import { Position, TextDocument } from 'vscode-languageserver-textdocument';
+import { parse } from '../utils/yaml';
+import log from '../utils/log';
+import { getMedialplan } from '../utils/request';
+import { SOURCE } from '../constants';
+import { checkConfig, CONFIG_DEFAULT } from '../lib';
+import { createCompletionItems, getCurrentLevel, getParentProperty } from './lib';
+import { DeployData } from '../..';
 
 const source = SOURCE;
 
@@ -33,46 +35,103 @@ const documents = new TextDocuments(TextDocument);
 
 let deployData: DeployData | null = null;
 
-let hasConfigurationCapability: boolean = false;
-let hasWorkspaceFolderCapability: boolean = false;
-interface ExampleSettings {
-  maxNumberOfProblems: number;
-}
+const completionItems = createCompletionItems(CONFIG_DEFAULT as any);
 
-const defaultSettings: ExampleSettings = { maxNumberOfProblems: 1000 };
-
-// Cache the settings of all open documents
-let documentSettings: Map<string, Thenable<ExampleSettings>> = new Map();
-
-connection.onInitialize((params: InitializeParams) => {
-  let capabilities = params.capabilities;
-
-  hasConfigurationCapability = !!(capabilities.workspace && !!capabilities.workspace.configuration);
-  hasWorkspaceFolderCapability = !!(
-    capabilities.workspace && !!capabilities.workspace.workspaceFolders
-  );
-
+connection.onInitialize(() => {
   const result: InitializeResult = {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
-      callHierarchyProvider: false,
+      completionProvider: {
+        resolveProvider: true,
+        triggerCharacters: [':'],
+      },
     },
   };
-  if (hasWorkspaceFolderCapability) {
-    result.capabilities.workspace = {
-      workspaceFolders: {
-        supported: true,
-      },
-    };
-  }
 
   return result;
 });
 
+let cursorPosition: Position = { line: 0, character: 0 };
+
+connection.onCompletion((textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
+  const document = documents.get(textDocumentPosition.textDocument.uri);
+  if (!document) {
+    console.warn('Document is missig', textDocumentPosition.textDocument.uri);
+    return [];
+  }
+
+  const line = cursorPosition.line;
+
+  const lineText = document.getText({
+    start: { line: line, character: 0 },
+    end: cursorPosition,
+  });
+
+  const currentLevel = getCurrentLevel(lineText);
+  const parentEl = getParentProperty({
+    text: document.getText(),
+    currentLevel,
+    currentLineIndex: cursorPosition.line,
+  });
+
+  const filteredItems = completionItems.filter((item) => {
+    const matchesLevel = item.data.level === currentLevel;
+    let matchesParent = parentEl ? parentEl.key === item.data.parent : true;
+    matchesParent = currentLevel === 2 || matchesParent;
+
+    return matchesLevel && matchesParent;
+  });
+
+  return filteredItems;
+});
+
+connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
+  return item;
+});
+
+connection.onNotification('custom/cursorPosition', (params) => {
+  const { uri, position } = params;
+  cursorPosition = position;
+  const document = documents.get(uri.external);
+  if (document) {
+    const line = position.line;
+
+    const lineText = document.getText({
+      start: { line: line, character: 0 },
+      end: position,
+    });
+
+    const currentLevel = getCurrentLevel(lineText);
+    const parentEl = getParentProperty({
+      text: document.getText(),
+      currentLevel,
+      currentLineIndex: cursorPosition.line,
+    });
+    const lineTextClear = lineText.trim();
+
+    const completionItem = completionItems.find((item) => {
+      let matchesParent = parentEl ? parentEl.key === item.data.parent : true;
+      matchesParent = currentLevel === 2 || matchesParent;
+      return (
+        new RegExp(`^${lineTextClear}`).test(item.label) &&
+        lineTextClear !== item.label &&
+        item.data.level === currentLevel &&
+        matchesParent
+      );
+    });
+    if (lineTextClear && completionItem) {
+      connection.sendNotification('custom/triggerCompletion', { uri: document.uri });
+    } else {
+      connection.sendNotification('custom/hideSuggestWidget');
+    }
+  } else {
+    console.error('Document not found', uri.external);
+  }
+});
+
 // Only keep settings for open documents
 documents.onDidClose((e) => {
-  log('warn', 'Server was closed');
-  documentSettings.delete(e.document.uri);
+  log('warn', 'Server was closed', e);
 });
 
 connection.onDidChangeWatchedFiles((_change) => {
@@ -92,6 +151,11 @@ documents.onDidChangeContent(async (change) => {
     log('warn', 'Document is missing', document);
     return;
   }
+
+  setTimeout(() => {
+    connection.sendNotification('custom/cursorPosition', { uri: change.document.uri });
+  }, 100);
+
   const configText = document.getText();
   const { data: config, error } = parse(configText);
 

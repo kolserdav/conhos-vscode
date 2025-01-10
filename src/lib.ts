@@ -148,7 +148,6 @@ export const CONFIG_DEFAULT = {
     }),
   }),
   services: {
-    name: 'services',
     required: true,
     value: createServiceDefault({
       image: {
@@ -526,6 +525,10 @@ function getServicePosition<
         return true;
       });
 
+      if (!services[item]) {
+        return;
+      }
+
       // Set serviceIndex and prooertyIndex
       Object.keys(services[item]).every((_value) => {
         if (property === _value) {
@@ -592,6 +595,9 @@ function getServicePosition<
               if (Array.isArray(services[name][property])) {
                 services[name][property].forEach((obj) => {
                   if (typeof obj === 'object') {
+                    if (!obj) {
+                      return;
+                    }
                     Object.keys(obj).forEach((subField) => {
                       // @ts-ignore
                       if (value[subField] !== undefined) {
@@ -832,10 +838,15 @@ function checkRequiredParams({
           if (!Number.isNaN(v)) {
             return;
           }
+          if (!services) {
+            return;
+          }
           Object.keys(services).forEach((serviceKey) => {
             const service = services[serviceKey];
             let serviceFieldIsExist = false;
-
+            if (!service) {
+              return;
+            }
             Object.keys(service).forEach((servicePropKey) => {
               if (serviceDefaultKey === servicePropKey) {
                 serviceFieldIsExist = true;
@@ -869,8 +880,14 @@ function checkRequiredParams({
         });
 
         // Loop by services
+        if (!services) {
+          return;
+        }
         Object.keys(services).forEach((serviceKey) => {
           const service = services[serviceKey];
+          if (!service) {
+            return;
+          }
           Object.keys(service).forEach((servicePropKey) => {
             const defVal =
               CONFIG_DEFAULT.services.value[
@@ -939,8 +956,8 @@ function checkRequiredParams({
                               field: 'services',
                               service: {
                                 name: serviceKey,
-                                property: subPropKey as keyof ConfigFile['services'][0],
-                                value: null,
+                                property: servicePropKey as keyof ConfigFile['services'][0],
+                                value: subPropKey,
                               },
                             }),
                           });
@@ -1039,6 +1056,9 @@ export async function checkConfig<S extends boolean>(
     return res;
   }
 
+  if (!services) {
+    return res;
+  }
   const serviceKeys = Object.keys(services);
 
   // Check services lenght
@@ -1063,6 +1083,9 @@ export async function checkConfig<S extends boolean>(
 
   for (let i = 0; serviceKeys[i]; i++) {
     const item = serviceKeys[i];
+    if (!services[item]) {
+      continue;
+    }
     const {
       domains,
       ports,
@@ -1550,8 +1573,11 @@ export async function checkConfig<S extends boolean>(
         }
       }
 
-      (ports || []).forEach(
-        ({
+      (ports || []).forEach((portItem) => {
+        if (!portItem) {
+          return;
+        }
+        const {
           port,
           type: _type,
           pathname,
@@ -1565,14 +1591,34 @@ export async function checkConfig<S extends boolean>(
           buffering,
           headers,
           ws,
-        }) => {
-          // Check timeout
-          if (timeout) {
-            if (_type !== 'proxy') {
+        } = portItem;
+        // Check timeout
+        if (timeout) {
+          if (_type !== 'proxy') {
+            res.push({
+              msg: `Timeout for port "${port}" of service "${item}" doesn't have any effect`,
+              data: `Timeout property doesn't allow for port type "${_type}"`,
+              exit: false,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    timeout,
+                  },
+                },
+              }),
+            });
+          } else {
+            const timeoutStr = timeout.toString();
+            if (!/^[0-9]+[a-zA-Z]{1,2}$/.test(timeoutStr)) {
               res.push({
-                msg: `Timeout for port "${port}" of service "${item}" doesn't have any effect`,
-                data: `Timeout property doesn't allow for port type "${_type}"`,
-                exit: false,
+                msg: `Timeout for port "${port}" of service "${item}" must be a string`,
+                data: `For example "30s", received "${timeout}"`,
+                exit: true,
                 position: getPosition({
                   config,
                   configText,
@@ -1581,66 +1627,64 @@ export async function checkConfig<S extends boolean>(
                     name: item,
                     property: 'ports',
                     value: {
-                      timeout,
+                      port,
                     },
                   },
                 }),
               });
             } else {
-              const timeoutStr = timeout.toString();
-              if (!/^[0-9]+[a-zA-Z]{1,2}$/.test(timeoutStr)) {
-                res.push({
-                  msg: `Timeout for port "${port}" of service "${item}" must be a string`,
-                  data: `For example "30s", received "${timeout}"`,
-                  exit: true,
-                  position: getPosition({
-                    config,
-                    configText,
-                    field: 'services',
-                    service: {
-                      name: item,
-                      property: 'ports',
-                      value: {
-                        port,
-                      },
-                    },
-                  }),
-                });
-              } else {
-                const postfix = timeoutStr.match(/[a-zA-Z]{1,2}$/);
-                if (postfix) {
-                  if (PORT_TIMEOUTS.indexOf(postfix[0]) === -1) {
-                    res.push({
-                      msg: `Timeout for port "${port}" of service "${item}" has wrong postfix`,
-                      data: `Allowed postfixes ${PORT_TIMEOUTS.join('|')}, received "${
-                        postfix[0]
-                      }"`,
-                      exit: true,
-                      position: getPosition({
-                        config,
-                        configText,
-                        field: 'services',
-                        service: {
-                          name: item,
-                          property: 'ports',
-                          value: {
-                            port,
-                          },
+              const postfix = timeoutStr.match(/[a-zA-Z]{1,2}$/);
+              if (postfix) {
+                if (PORT_TIMEOUTS.indexOf(postfix[0]) === -1) {
+                  res.push({
+                    msg: `Timeout for port "${port}" of service "${item}" has wrong postfix`,
+                    data: `Allowed postfixes ${PORT_TIMEOUTS.join('|')}, received "${postfix[0]}"`,
+                    exit: true,
+                    position: getPosition({
+                      config,
+                      configText,
+                      field: 'services',
+                      service: {
+                        name: item,
+                        property: 'ports',
+                        value: {
+                          port,
                         },
-                      }),
-                    });
-                  }
+                      },
+                    }),
+                  });
                 }
               }
             }
           }
-          // Check buffer_size
-          if (buffer_size) {
-            if (_type !== 'proxy') {
+        }
+        // Check buffer_size
+        if (buffer_size) {
+          if (_type !== 'proxy') {
+            res.push({
+              msg: `Buffer size for port "${port}" of service "${item}" doesn't have any effect`,
+              data: `Buffer size property doesn't allow for port type "${_type}"`,
+              exit: false,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    buffer_size,
+                  },
+                },
+              }),
+            });
+          } else {
+            const bufferStr = buffer_size.toString();
+            if (!/^[0-9]+k$/.test(bufferStr)) {
               res.push({
-                msg: `Buffer size for port "${port}" of service "${item}" doesn't have any effect`,
-                data: `Buffer size property doesn't allow for port type "${_type}"`,
-                exit: false,
+                msg: `Buffer size for port "${port}" of service "${item}" must be a string`,
+                data: `For example "10k", received "${buffer_size}"`,
+                exit: true,
                 position: getPosition({
                   config,
                   configText,
@@ -1655,59 +1699,59 @@ export async function checkConfig<S extends boolean>(
                 }),
               });
             } else {
-              const bufferStr = buffer_size.toString();
-              if (!/^[0-9]+k$/.test(bufferStr)) {
-                res.push({
-                  msg: `Buffer size for port "${port}" of service "${item}" must be a string`,
-                  data: `For example "10k", received "${buffer_size}"`,
-                  exit: true,
-                  position: getPosition({
-                    config,
-                    configText,
-                    field: 'services',
-                    service: {
-                      name: item,
-                      property: 'ports',
-                      value: {
-                        buffer_size,
-                      },
-                    },
-                  }),
-                });
-              } else {
-                const prefix = bufferStr.match(/^[0-9]+/);
-                if (prefix) {
-                  const num = parseInt(prefix[0], 10);
-                  if (num > BUFFER_SIZE_MAX) {
-                    res.push({
-                      msg: `Buffer size for port "${port}" of service "${item}" is not allowed`,
-                      data: `Maximmum allowed buffer size is "${BUFFER_SIZE_MAX}k", received "${num}k"`,
-                      exit: true,
-                      position: getPosition({
-                        config,
-                        configText,
-                        field: 'services',
-                        service: {
-                          name: item,
-                          property: 'ports',
-                          value: {
-                            buffer_size,
-                          },
+              const prefix = bufferStr.match(/^[0-9]+/);
+              if (prefix) {
+                const num = parseInt(prefix[0], 10);
+                if (num > BUFFER_SIZE_MAX) {
+                  res.push({
+                    msg: `Buffer size for port "${port}" of service "${item}" is not allowed`,
+                    data: `Maximmum allowed buffer size is "${BUFFER_SIZE_MAX}k", received "${num}k"`,
+                    exit: true,
+                    position: getPosition({
+                      config,
+                      configText,
+                      field: 'services',
+                      service: {
+                        name: item,
+                        property: 'ports',
+                        value: {
+                          buffer_size,
                         },
-                      }),
-                    });
-                  }
+                      },
+                    }),
+                  });
                 }
               }
             }
           }
-          // Check client_max_body_size
-          if (client_max_body_size) {
-            if (_type !== 'proxy') {
+        }
+        // Check client_max_body_size
+        if (client_max_body_size) {
+          if (_type !== 'proxy') {
+            res.push({
+              msg: `Client max body size for port "${port}" of service "${item}" doesn't have any effect`,
+              data: `Client max body size doesn't allow for port type "${_type}"`,
+              exit: false,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    client_max_body_size,
+                  },
+                },
+              }),
+            });
+          } else {
+            const bufferStr = client_max_body_size.toString();
+            if (!/^[0-9]+m$/.test(bufferStr)) {
               res.push({
-                msg: `Client max body size for port "${port}" of service "${item}" doesn't have any effect`,
-                data: `Client max body size doesn't allow for port type "${_type}"`,
-                exit: false,
+                msg: `Client max body size for port "${port}" of service "${item}" must be a string`,
+                data: `For example "4m", received "${client_max_body_size}"`,
+                exit: true,
                 position: getPosition({
                   config,
                   configText,
@@ -1722,59 +1766,58 @@ export async function checkConfig<S extends boolean>(
                 }),
               });
             } else {
-              const bufferStr = client_max_body_size.toString();
-              if (!/^[0-9]+m$/.test(bufferStr)) {
-                res.push({
-                  msg: `Client max body size for port "${port}" of service "${item}" must be a string`,
-                  data: `For example "4m", received "${client_max_body_size}"`,
-                  exit: true,
-                  position: getPosition({
-                    config,
-                    configText,
-                    field: 'services',
-                    service: {
-                      name: item,
-                      property: 'ports',
-                      value: {
-                        client_max_body_size,
-                      },
-                    },
-                  }),
-                });
-              } else {
-                const prefix = bufferStr.match(/^[0-9]+/);
-                if (prefix) {
-                  const num = parseInt(prefix[0], 10);
-                  if (num > CLIENT_BODY_SIZE_MAX) {
-                    res.push({
-                      msg: `Client max body size for port "${port}" of service "${item}" is not allowed`,
-                      data: `Maximmum allowed is "${CLIENT_BODY_SIZE_MAX}m", received "${num}m"`,
-                      exit: true,
-                      position: getPosition({
-                        config,
-                        configText,
-                        field: 'services',
-                        service: {
-                          name: item,
-                          property: 'ports',
-                          value: {
-                            client_max_body_size,
-                          },
+              const prefix = bufferStr.match(/^[0-9]+/);
+              if (prefix) {
+                const num = parseInt(prefix[0], 10);
+                if (num > CLIENT_BODY_SIZE_MAX) {
+                  res.push({
+                    msg: `Client max body size for port "${port}" of service "${item}" is not allowed`,
+                    data: `Maximmum allowed is "${CLIENT_BODY_SIZE_MAX}m", received "${num}m"`,
+                    exit: true,
+                    position: getPosition({
+                      config,
+                      configText,
+                      field: 'services',
+                      service: {
+                        name: item,
+                        property: 'ports',
+                        value: {
+                          client_max_body_size,
                         },
-                      }),
-                    });
-                  }
+                      },
+                    }),
+                  });
                 }
               }
             }
           }
-          // Check http_version
-          if (http_version) {
-            if (_type !== 'proxy') {
+        }
+        // Check http_version
+        if (http_version) {
+          if (_type !== 'proxy') {
+            res.push({
+              msg: `HTTP version for port "${port}" of service "${item}" doesn't have any effect`,
+              data: `HTTP version property doesn't allow for port type "${_type}"`,
+              exit: false,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    http_version,
+                  },
+                },
+              }),
+            });
+          } else {
+            if (ALLOWED_HTTP_VERSIONS.indexOf(http_version) === -1) {
               res.push({
-                msg: `HTTP version for port "${port}" of service "${item}" doesn't have any effect`,
-                data: `HTTP version property doesn't allow for port type "${_type}"`,
-                exit: false,
+                msg: `Not allowed HTTP version for port "${port}" of service "${item}"`,
+                data: `Allowed HTTP versions "${ALLOWED_HTTP_VERSIONS.join('|')}", received "${http_version}"`,
+                exit: true,
                 position: getPosition({
                   config,
                   configText,
@@ -1788,35 +1831,35 @@ export async function checkConfig<S extends boolean>(
                   },
                 }),
               });
-            } else {
-              if (ALLOWED_HTTP_VERSIONS.indexOf(http_version) === -1) {
-                res.push({
-                  msg: `Not allowed HTTP version for port "${port}" of service "${item}"`,
-                  data: `Allowed HTTP versions "${ALLOWED_HTTP_VERSIONS.join('|')}", received "${http_version}"`,
-                  exit: true,
-                  position: getPosition({
-                    config,
-                    configText,
-                    field: 'services',
-                    service: {
-                      name: item,
-                      property: 'ports',
-                      value: {
-                        http_version,
-                      },
-                    },
-                  }),
-                });
-              }
             }
           }
-          // Check request_buffering
-          if (request_buffering) {
-            if (_type !== 'proxy') {
+        }
+        // Check request_buffering
+        if (request_buffering) {
+          if (_type !== 'proxy') {
+            res.push({
+              msg: `Request buffering for port "${port}" of service "${item}" doesn't have any effect`,
+              data: `Request buffering property doesn't allow for port type "${_type}"`,
+              exit: false,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    request_buffering,
+                  },
+                },
+              }),
+            });
+          } else {
+            if (ALLOWED_ON_OFFS.indexOf(request_buffering) === -1) {
               res.push({
-                msg: `Request buffering for port "${port}" of service "${item}" doesn't have any effect`,
-                data: `Request buffering property doesn't allow for port type "${_type}"`,
-                exit: false,
+                msg: `Not allowed request buffering value for port "${port}" of service "${item}"`,
+                data: `Allowed request buffering values "${ALLOWED_ON_OFFS.join('|')}", received "${request_buffering}"`,
+                exit: true,
                 position: getPosition({
                   config,
                   configText,
@@ -1830,35 +1873,35 @@ export async function checkConfig<S extends boolean>(
                   },
                 }),
               });
-            } else {
-              if (ALLOWED_ON_OFFS.indexOf(request_buffering) === -1) {
-                res.push({
-                  msg: `Not allowed request buffering value for port "${port}" of service "${item}"`,
-                  data: `Allowed request buffering values "${ALLOWED_ON_OFFS.join('|')}", received "${request_buffering}"`,
-                  exit: true,
-                  position: getPosition({
-                    config,
-                    configText,
-                    field: 'services',
-                    service: {
-                      name: item,
-                      property: 'ports',
-                      value: {
-                        request_buffering,
-                      },
-                    },
-                  }),
-                });
-              }
             }
           }
-          // Check buffering
-          if (buffering) {
-            if (_type !== 'proxy') {
+        }
+        // Check buffering
+        if (buffering) {
+          if (_type !== 'proxy') {
+            res.push({
+              msg: `Buffering for port "${port}" of service "${item}" doesn't have any effect`,
+              data: `Buffering property doesn't allow for port type "${_type}"`,
+              exit: false,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    buffering,
+                  },
+                },
+              }),
+            });
+          } else {
+            if (ALLOWED_ON_OFFS.indexOf(buffering) === -1) {
               res.push({
-                msg: `Buffering for port "${port}" of service "${item}" doesn't have any effect`,
-                data: `Buffering property doesn't allow for port type "${_type}"`,
-                exit: false,
+                msg: `Not allowed buffering value for port "${port}" of service "${item}"`,
+                data: `Allowed buffering values "${ALLOWED_ON_OFFS.join('|')}", received "${buffering}"`,
+                exit: true,
                 position: getPosition({
                   config,
                   configText,
@@ -1872,35 +1915,35 @@ export async function checkConfig<S extends boolean>(
                   },
                 }),
               });
-            } else {
-              if (ALLOWED_ON_OFFS.indexOf(buffering) === -1) {
-                res.push({
-                  msg: `Not allowed buffering value for port "${port}" of service "${item}"`,
-                  data: `Allowed buffering values "${ALLOWED_ON_OFFS.join('|')}", received "${buffering}"`,
-                  exit: true,
-                  position: getPosition({
-                    config,
-                    configText,
-                    field: 'services',
-                    service: {
-                      name: item,
-                      property: 'ports',
-                      value: {
-                        buffering,
-                      },
-                    },
-                  }),
-                });
-              }
             }
           }
-          // Check ws
-          if (ws) {
-            if (_type !== 'proxy') {
+        }
+        // Check ws
+        if (ws) {
+          if (_type !== 'proxy') {
+            res.push({
+              msg: `WS for port "${port}" of service "${item}" doesn't have any effect`,
+              data: `WS property doesn't allow for port type "${_type}"`,
+              exit: false,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    ws,
+                  },
+                },
+              }),
+            });
+          } else {
+            if (typeof ws !== 'boolean') {
               res.push({
-                msg: `WS for port "${port}" of service "${item}" doesn't have any effect`,
-                data: `WS property doesn't allow for port type "${_type}"`,
-                exit: false,
+                msg: `Not allowed 'ws' value for port "${port}" of service "${item}"`,
+                data: `Property 'ws' must be of type "boolean", received "${typeof ws}"`,
+                exit: true,
                 position: getPosition({
                   config,
                   configText,
@@ -1914,11 +1957,36 @@ export async function checkConfig<S extends boolean>(
                   },
                 }),
               });
-            } else {
-              if (typeof ws !== 'boolean') {
+            }
+          }
+        }
+        // Check headers
+        if (headers) {
+          if (typeof headers !== 'object') {
+            res.push({
+              msg: `Not allowed 'headers' for port "${port}" of service "${item}"`,
+              data: `Propery 'headers' must be of type "object", received "${typeof headers}"`,
+              exit: true,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    headers,
+                  },
+                },
+              }),
+            });
+          } else {
+            Object.keys(headers).forEach((key) => {
+              const value = headers[key];
+              if (typeof value !== 'string') {
                 res.push({
-                  msg: `Not allowed 'ws' value for port "${port}" of service "${item}"`,
-                  data: `Property 'ws' must be of type "boolean", received "${typeof ws}"`,
+                  msg: `Not allowed header for port "${port}" of service "${item}"`,
+                  data: `Value for header '${key}' must be of type string, received "${typeof value}": '${value}'`,
                   exit: true,
                   position: getPosition({
                     config,
@@ -1928,63 +1996,111 @@ export async function checkConfig<S extends boolean>(
                       name: item,
                       property: 'ports',
                       value: {
-                        ws,
+                        headers,
                       },
                     },
                   }),
                 });
               }
-            }
+            });
           }
-          // Check headers
-          if (headers) {
-            if (typeof headers !== 'object') {
-              res.push({
-                msg: `Not allowed 'headers' for port "${port}" of service "${item}"`,
-                data: `Propery 'headers' must be of type "object", received "${typeof headers}"`,
-                exit: true,
-                position: getPosition({
-                  config,
-                  configText,
-                  field: 'services',
-                  service: {
-                    name: item,
-                    property: 'ports',
-                    value: {
-                      headers,
-                    },
-                  },
-                }),
-              });
-            } else {
-              Object.keys(headers).forEach((key) => {
-                const value = headers[key];
-                if (typeof value !== 'string') {
-                  res.push({
-                    msg: `Not allowed header for port "${port}" of service "${item}"`,
-                    data: `Value for header '${key}' must be of type string, received "${typeof value}": '${value}'`,
-                    exit: true,
-                    position: getPosition({
-                      config,
-                      configText,
-                      field: 'services',
-                      service: {
-                        name: item,
-                        property: 'ports',
-                        value: {
-                          headers,
-                        },
-                      },
-                    }),
-                  });
-                }
-              });
-            }
-          }
-          // Check port
-          if (!port) {
+        }
+        // Check port
+        if (!port) {
+          res.push({
+            msg: `Required parameter "${port}" in service "${item}" is missing`,
+            data: '',
+            exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'ports',
+                value: {
+                  port: 0,
+                },
+              },
+            }),
+          });
+          return res;
+        }
+        if (Number.isNaN(parseInt(port.toString(), 10)) || /\./.test(port.toString())) {
+          res.push({
+            msg: `Port "${port}" of service "${item}" must be an integer`,
+            data: '',
+            exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'ports',
+                value: {
+                  port,
+                },
+              },
+            }),
+          });
+        }
+        // Check location
+        if (pathname) {
+          res = res.concat(
+            checkLocation({ location: pathname, configText, config, service: item })
+          );
+        }
+        // Check proxy_path
+        if (proxy_path) {
+          res = res.concat(
+            checkLocation({ location: proxy_path, service: item, config, configText }, 'Proxy path')
+          );
+          if (_type === 'php') {
             res.push({
-              msg: `Port "${port}" of service "${item}" is missing`,
+              msg: 'Property "proxy_path" doesn\'t have any effect for port type "php"',
+              data: item,
+              exit: false,
+              position: getPosition({
+                config,
+                configText,
+                field: 'services',
+                service: {
+                  name: item,
+                  property: 'ports',
+                  value: {
+                    proxy_path,
+                  },
+                },
+              }),
+            });
+          }
+        }
+        // Check port type
+        if (PORT_TYPES.indexOf(_type) === -1) {
+          res.push({
+            msg: `Port type "${_type}" of service "${item}" is not allowed`,
+            data: `Allowed port types: [${PORT_TYPES.join('|')}]`,
+            exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'ports',
+                value: {
+                  type: _type,
+                },
+              },
+            }),
+          });
+        }
+        // Check port static
+        if (_static) {
+          if (!Array.isArray(_static)) {
+            res.push({
+              msg: `Static must be an array in service "${item}"`,
               data: '',
               exit: true,
               position: getPosition({
@@ -1995,92 +2111,18 @@ export async function checkConfig<S extends boolean>(
                   name: item,
                   property: 'ports',
                   value: {
-                    port: 0,
+                    static: [],
                   },
                 },
               }),
             });
             return res;
           }
-          if (Number.isNaN(parseInt(port.toString(), 10)) || /\./.test(port.toString())) {
-            res.push({
-              msg: `Port "${port}" of service "${item}" must be an integer`,
-              data: '',
-              exit: true,
-              position: getPosition({
-                config,
-                configText,
-                field: 'services',
-                service: {
-                  name: item,
-                  property: 'ports',
-                  value: {
-                    port,
-                  },
-                },
-              }),
-            });
-          }
-          // Check location
-          if (pathname) {
-            res = res.concat(
-              checkLocation({ location: pathname, configText, config, service: item })
-            );
-          }
-          // Check proxy_path
-          if (proxy_path) {
-            res = res.concat(
-              checkLocation(
-                { location: proxy_path, service: item, config, configText },
-                'Proxy path'
-              )
-            );
-            if (_type === 'php') {
+          _static.forEach(({ path, location: _location, index }) => {
+            if (!_location) {
               res.push({
-                msg: 'Property "proxy_path" doesn\'t have any effect for port type "php"',
+                msg: `Field "static.location" is required for port ${port}`,
                 data: item,
-                exit: false,
-                position: getPosition({
-                  config,
-                  configText,
-                  field: 'services',
-                  service: {
-                    name: item,
-                    property: 'ports',
-                    value: {
-                      proxy_path,
-                    },
-                  },
-                }),
-              });
-            }
-          }
-          // Check port type
-          if (PORT_TYPES.indexOf(_type) === -1) {
-            res.push({
-              msg: `Port type "${_type}" of service "${item}" is not allowed`,
-              data: `Allowed port types: [${PORT_TYPES.join('|')}]`,
-              exit: true,
-              position: getPosition({
-                config,
-                configText,
-                field: 'services',
-                service: {
-                  name: item,
-                  property: 'ports',
-                  value: {
-                    type: _type,
-                  },
-                },
-              }),
-            });
-          }
-          // Check port static
-          if (_static) {
-            if (!Array.isArray(_static)) {
-              res.push({
-                msg: `Static must be an array in service "${item}"`,
-                data: '',
                 exit: true,
                 position: getPosition({
                   config,
@@ -2095,13 +2137,32 @@ export async function checkConfig<S extends boolean>(
                   },
                 }),
               });
-              return res;
             }
-            _static.forEach(({ path, location: _location, index }) => {
-              if (!_location) {
+            if (!path) {
+              res.push({
+                msg: `Field "static.path" is required for port '${port}' in service "${item}"`,
+                data: item,
+                exit: true,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      static: [],
+                    },
+                  },
+                }),
+              });
+            }
+            if (index) {
+              const indexReg = /[a-zA-Z0-9\\.\-_]/;
+              if (!indexReg.test(index)) {
                 res.push({
-                  msg: `Field "static.location" is required for port ${port}`,
-                  data: item,
+                  msg: `Field "static.index" for port ${port} in service "${item}" contains not allowed symbols`,
+                  data: `Allowed regexp ${indexReg}`,
                   exit: true,
                   position: getPosition({
                     config,
@@ -2117,73 +2178,32 @@ export async function checkConfig<S extends boolean>(
                   }),
                 });
               }
-              if (!path) {
-                res.push({
-                  msg: `Field "static.path" is required for port '${port}' in service "${item}"`,
-                  data: item,
-                  exit: true,
-                  position: getPosition({
-                    config,
-                    configText,
-                    field: 'services',
-                    service: {
-                      name: item,
-                      property: 'ports',
-                      value: {
-                        static: [],
-                      },
+            }
+            const loc = pathname || DEFAULT_LOCATION;
+            if (loc === _location) {
+              res.push({
+                msg: 'Fields "location" and "static.location" can not be the same',
+                data: `Check port "${port}" of service "${item}"`,
+                exit: true,
+                position: getPosition({
+                  config,
+                  configText,
+                  field: 'services',
+                  service: {
+                    name: item,
+                    property: 'ports',
+                    value: {
+                      static: [],
                     },
-                  }),
-                });
-              }
-              if (index) {
-                const indexReg = /[a-zA-Z0-9\\.\-_]/;
-                if (!indexReg.test(index)) {
-                  res.push({
-                    msg: `Field "static.index" for port ${port} in service "${item}" contains not allowed symbols`,
-                    data: `Allowed regexp ${indexReg}`,
-                    exit: true,
-                    position: getPosition({
-                      config,
-                      configText,
-                      field: 'services',
-                      service: {
-                        name: item,
-                        property: 'ports',
-                        value: {
-                          static: [],
-                        },
-                      },
-                    }),
-                  });
-                }
-              }
-              const loc = pathname || DEFAULT_LOCATION;
-              if (loc === _location) {
-                res.push({
-                  msg: 'Fields "location" and "static.location" can not be the same',
-                  data: `Check port "${port}" of service "${item}"`,
-                  exit: true,
-                  position: getPosition({
-                    config,
-                    configText,
-                    field: 'services',
-                    service: {
-                      name: item,
-                      property: 'ports',
-                      value: {
-                        static: [],
-                      },
-                    },
-                  }),
-                });
-              }
-              // Check location
-              res.concat(checkLocation({ location: _location, config, configText, service: item }));
-            });
-          }
+                  },
+                }),
+              });
+            }
+            // Check location
+            res.concat(checkLocation({ location: _location, config, configText, service: item }));
+          });
         }
-      );
+      });
 
       // Check domains
       if (domains) {
@@ -2207,6 +2227,28 @@ export async function checkConfig<S extends boolean>(
             });
           }
         });
+      }
+
+      // Check enviroment is array
+      if (environment) {
+        if (!Array.isArray(environment)) {
+          res.push({
+            msg: 'Environment must be an array',
+            data: `Received "${typeof environment}"`,
+            exit: true,
+            position: getPosition({
+              config,
+              configText,
+              field: 'services',
+              service: {
+                name: item,
+                property: 'environment',
+                value: null,
+              },
+            }),
+          });
+          return res;
+        }
       }
 
       // Check environment format

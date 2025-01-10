@@ -24,7 +24,7 @@ const config = ({ WEBPACK_BUILD }, argv) => {
     context: __dirname,
     entry: {
       extension: './src/extension.ts',
-      server: './src/server.ts',
+      server: './src/server/server.ts',
       lib: './src/lib.ts',
       constants: './src/constants.ts',
       scripts: './src/scripts.ts',
@@ -40,9 +40,6 @@ const config = ({ WEBPACK_BUILD }, argv) => {
     },
     resolve: {
       extensions: ['.ts', '.js'],
-      alias: {
-        vscode: path.resolve(__dirname, 'node_modules/vscode'),
-      },
     },
     module: {
       rules: [

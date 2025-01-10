@@ -40,9 +40,6 @@ export async function activate(context: vscode.ExtensionContext) {
       { scheme: 'file', language: 'yaml', pattern: '**/*.conhos.yaml' },
       { scheme: 'file', language: 'yaml', pattern: '**/*.conhos.yml' },
     ],
-    synchronize: {
-      fileEvents: vscode.workspace.createFileSystemWatcher('*conhos.y(a)ml'),
-    },
   };
 
   client = new LanguageClient(
@@ -66,6 +63,41 @@ export async function activate(context: vscode.ExtensionContext) {
         break;
       default:
         log('warn', 'Default newState', event);
+    }
+  });
+
+  client.onNotification('custom/triggerCompletion', (params) => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const position = editor.selection.active;
+      client.sendNotification('custom/triggerCompletion', {
+        uri: editor.document.uri,
+        position,
+      });
+      vscode.commands.executeCommand('editor.action.triggerSuggest').then((e) => {
+        console.info('Suggestion triggered successfully', e);
+      });
+    } else {
+      console.error('No active text editor found.', params);
+    }
+  });
+
+  client.onNotification('custom/hideSuggestWidget', (params) => {
+    vscode.commands.executeCommand('hideSuggestWidget').then((e) => {
+      console.info('Suggestion widget closed successfully', e);
+    });
+  });
+
+  client.onNotification('custom/cursorPosition', (params) => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const position = editor.selection.active;
+      client.sendNotification('custom/cursorPosition', {
+        uri: editor.document.uri,
+        position,
+      });
+    } else {
+      console.error('No active text editor found.', params);
     }
   });
 }
