@@ -183,3 +183,32 @@ export interface CheckConfigResult {
 export type ConfigFileBackend = Omit<ConfigFile, 'services'> & {
   services: Record<string, ConfigFile['services'][0] & { serviceId: string }>;
 };
+
+export interface Config {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  value: any;
+  detail: string;
+  documentation: string;
+}
+
+export interface Position {
+  line: number;
+  character: number;
+}
+
+export interface Range {
+  start: Position;
+  end: Position;
+}
+
+export interface CompletionItem {
+  label: string;
+  kind: CompletionItemKind;
+  detail: string;
+  documentation: string;
+  data: {
+    level: number;
+    parent: string;
+    type: string;
+  };
+}

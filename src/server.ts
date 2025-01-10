@@ -20,13 +20,20 @@ import {
   CompletionItem,
 } from 'vscode-languageserver/node';
 import { Position, TextDocument } from 'vscode-languageserver-textdocument';
-import { parse } from '../utils/yaml';
-import log from '../utils/log';
-import { getMedialplan } from '../utils/request';
-import { SOURCE } from '../constants';
-import { checkConfig, CONFIG_DEFAULT } from '../lib';
-import { createCompletionItems, getCurrentLevel, getParentProperty } from './lib';
-import { DeployData } from '../..';
+import { parse } from './utils/yaml';
+import log from './utils/log';
+import { getMedialplan } from './utils/request';
+import { SOURCE } from './constants';
+import {
+  checkConfig,
+  CONFIG_DEFAULT,
+  createCompletionItems,
+  getCurrentLevel,
+  getParentProperty,
+  getWordRangeAtPosition,
+} from './lib';
+
+import { DeployData } from '..';
 
 const source = SOURCE;
 
@@ -45,6 +52,7 @@ connection.onInitialize(() => {
         resolveProvider: true,
         triggerCharacters: [':'],
       },
+      hoverProvider: true,
     },
   };
 
@@ -87,6 +95,36 @@ connection.onCompletion((textDocumentPosition: TextDocumentPositionParams): Comp
 
 connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
   return item;
+});
+
+connection.onHover((params) => {
+  const { textDocument, position } = params;
+  const document = documents.get(textDocument.uri);
+  if (!document) {
+    console.warn('Document is missing in hover callback');
+    return;
+  }
+  const wordRange = getWordRangeAtPosition(document.getText(), position);
+  if (!wordRange) {
+    console.warn('Word range is missing', position);
+    return;
+  }
+  const word = document.getText(wordRange);
+
+  const info = completionItems.find((item) => item.label === word);
+
+  if (!info || !info?.detail) {
+    return null;
+  }
+
+  const hoverMessage = `**${word}** - ${info.detail} [${typeof info.data.type}]  \n___  \n${info.documentation}`;
+
+  return {
+    contents: {
+      kind: 'markdown',
+      value: hoverMessage,
+    },
+  };
 });
 
 connection.onNotification('custom/cursorPosition', (params) => {

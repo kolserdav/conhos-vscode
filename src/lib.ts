@@ -10,6 +10,8 @@
  ******************************************************************************************/
 import type {
   CheckConfigResult,
+  CompletionItem,
+  Config,
   ConfigFile,
   DeployData,
   Git,
@@ -17,6 +19,8 @@ import type {
   ParsedGitRepo,
   Port,
   PortStatic,
+  Position,
+  Range,
   Server,
   ServiceSize,
   ServiceType,
@@ -2678,4 +2682,134 @@ function isAbsolute(filePath: string) {
   }
 
   return filePath.startsWith('http://') || filePath.startsWith('https://');
+}
+
+enum CompletionItemKind {
+  // eslint-disable-next-line no-unused-vars
+  Text = 1,
+  // eslint-disable-next-line no-unused-vars
+  Constant = 21,
+  // eslint-disable-next-line no-unused-vars
+  Enum = 13,
+  // eslint-disable-next-line no-unused-vars
+  Variable = 6,
+  // eslint-disable-next-line no-unused-vars
+  Struct = 22,
+}
+
+export function createCompletionItems(
+  config: { value: Config },
+  level = 0,
+  parent = ''
+): CompletionItem[] {
+  let res: CompletionItem[] = [];
+  if (!config) {
+    console.warn('Config is missing in createCompletionItems', config);
+    return res;
+  }
+  Object.keys(config).forEach((label) => {
+    const item = config[label as keyof typeof config];
+    if (!item) {
+      return;
+    }
+    const { value, detail, documentation } = item;
+    res.push({
+      label,
+      kind:
+        typeof value === 'string'
+          ? CompletionItemKind.Text
+          : typeof value === 'number'
+            ? CompletionItemKind.Constant
+            : Array.isArray(value)
+              ? CompletionItemKind.Enum
+              : typeof value === 'boolean'
+                ? CompletionItemKind.Variable
+                : typeof value === 'object'
+                  ? CompletionItemKind.Struct
+                  : CompletionItemKind.Text,
+      detail,
+      documentation,
+      data: {
+        level,
+        parent,
+        type: typeof value,
+      },
+    });
+    if (typeof item.value === 'object') {
+      res = res.concat(
+        createCompletionItems(
+          item.value,
+          level +
+            (label === 'services' ||
+            label === 'ports' ||
+            label === 'static' ||
+            Array.isArray(item.value)
+              ? 2
+              : 1),
+          label
+        )
+      );
+    }
+  });
+
+  return res;
+}
+
+export function getParentProperty({
+  text,
+  currentLevel,
+  currentLineIndex,
+}: {
+  text: string;
+  currentLevel: number;
+  currentLineIndex: number;
+}) {
+  const lines = text.split('\n');
+
+  for (let i = currentLineIndex - 1; i >= 0; i--) {
+    const line = lines[i];
+    const parentLevel = getCurrentLevel(line);
+
+    if (parentLevel < currentLevel) {
+      const match = line.match(/^\s*-?\s*(\w+):\s*(.*)/);
+      if (match) {
+        const parentKey = match[1].trim();
+        const parentValue = match[2].trim();
+        return { key: parentKey, value: parentValue };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function getCurrentLevel(currentLine: string) {
+  const leadingSpacesM = currentLine.match(/^\s*-?\s*|\s*/);
+  if (!leadingSpacesM) {
+    return 1;
+  }
+  const leadingSpaces = leadingSpacesM[0].length;
+
+  const level = leadingSpaces / 2;
+
+  return level;
+}
+
+export function getWordRangeAtPosition(text: string, position: Position): Range | null {
+  const line = text.split('\n')[position.line];
+  const wordRegex = /\w+/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = wordRegex.exec(line)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+
+    if (position.character >= start && position.character <= end) {
+      return {
+        start: { line: position.line, character: start },
+        end: { line: position.line, character: end },
+      };
+    }
+  }
+  return null;
 }

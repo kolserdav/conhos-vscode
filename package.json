@@ -1,10 +1,10 @@
 {
   "name": "conhos-vscode",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "displayName": "Conhos",
   "publisher": "kolserdav",
   "icon": "resources/logo.png",
-  "description": "Highlights the syntax of the conhos.yml file",
+  "description": "Highlights, auto completion and hover the syntax of the conhos.yml file",
   "license": "MIT",
   "main": "index.js",
   "engines": {
