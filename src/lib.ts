@@ -50,11 +50,16 @@ import {
   VOLUME_REMOTE_REGEX,
 } from './constants';
 
+interface CompletionData {
+  details: string;
+  documentation: string;
+}
+
 type ConfigServerDefault<O extends Server> = {
   [K in keyof Required<O>]: {
     required: undefined extends O[K] ? false : true;
     value: Required<O[K]>;
-  };
+  } & CompletionData;
 };
 
 function createServerDefault<O extends Server>(
@@ -67,7 +72,7 @@ type ConfigStaticDefault<O extends PortStatic> = {
   [K in keyof Required<O>]: {
     required: undefined extends O[K] ? false : true;
     value: Required<O[K]>;
-  };
+  } & CompletionData;
 };
 
 function createStaticDefault<O extends PortStatic>(
@@ -80,7 +85,7 @@ type ConfigPortsDefault<O extends Port> = {
   [K in keyof Required<O>]: {
     required: undefined extends O[K] ? false : true;
     value: K extends 'static' ? Required<ReturnType<typeof createStaticDefault>> : Required<O[K]>;
-  };
+  } & CompletionData;
 };
 
 function createPortsDefault<O extends Port>(config: ConfigPortsDefault<O>): ConfigPortsDefault<O> {
@@ -91,7 +96,7 @@ type ConfigGitDefault<O extends Git> = {
   [K in keyof Required<O>]: {
     required: undefined extends O[K] ? false : true;
     value: Required<O[K]>;
-  };
+  } & CompletionData;
 };
 
 function createGitDefault<O extends Git>(config: ConfigGitDefault<O>): ConfigGitDefault<O> {
@@ -102,7 +107,7 @@ type ConfigFileDefault<T extends keyof ConfigFile> = {
   name: T;
   required: undefined extends ConfigFile[T] ? false : true;
   value: T extends 'server' ? Required<ReturnType<typeof createServerDefault>> : ConfigFile[T];
-};
+} & CompletionData;
 
 type ConfigServiceDefault<O extends ConfigFile['services'][0]> = {
   [K in keyof Required<O>]: {
@@ -112,7 +117,7 @@ type ConfigServiceDefault<O extends ConfigFile['services'][0]> = {
       : K extends 'ports'
         ? Required<ReturnType<typeof createPortsDefault>>
         : Required<O[K]>;
-  };
+  } & CompletionData;
 };
 
 function createServiceDefault<O extends ConfigFile['services'][0]>(
@@ -132,6 +137,8 @@ export const CONFIG_DEFAULT = {
     name: 'name',
     required: true,
     value: '',
+    details: '',
+    documentation: '',
   }),
   server: createConfigDefaultItem({
     name: 'server',
@@ -140,12 +147,18 @@ export const CONFIG_DEFAULT = {
       node_name: {
         required: true,
         value: '',
+        details: '',
+        documentation: '',
       },
       api_key: {
         required: true,
         value: '',
+        details: '',
+        documentation: '',
       },
     }),
+    details: '',
+    documentation: '',
   }),
   services: {
     required: true,
@@ -153,26 +166,38 @@ export const CONFIG_DEFAULT = {
       image: {
         required: true,
         value: 'node',
+        details: '',
+        documentation: '',
       },
       size: {
         required: true,
         value: 'mili',
+        details: '',
+        documentation: '',
       },
       active: {
         required: true,
         value: true,
+        details: '',
+        documentation: '',
       },
       no_restart: {
         required: false,
         value: false,
+        details: '',
+        documentation: '',
       },
       version: {
         required: true,
         value: 'latest',
+        details: '',
+        documentation: '',
       },
       entrypoint: {
         required: false,
         value: [],
+        details: '',
+        documentation: '',
       },
       git: {
         required: false,
@@ -180,16 +205,24 @@ export const CONFIG_DEFAULT = {
           url: {
             required: true,
             value: '',
+            details: '',
+            documentation: '',
           },
           untracked: {
             required: false,
             value: undefined,
+            details: '',
+            documentation: '',
           },
           branch: {
             required: true,
             value: '',
+            details: '',
+            documentation: '',
           },
         }),
+        details: '',
+        documentation: '',
       },
       ports: {
         required: false,
@@ -197,50 +230,74 @@ export const CONFIG_DEFAULT = {
           port: {
             required: true,
             value: 3000,
+            details: '',
+            documentation: '',
           },
           type: {
             required: true,
             value: 'proxy',
+            details: '',
+            documentation: '',
           },
           proxy_path: {
             required: false,
             value: '',
+            details: '',
+            documentation: '',
           },
           pathname: {
             required: false,
             value: '',
+            details: '',
+            documentation: '',
           },
           timeout: {
             required: false,
             value: '',
+            details: '',
+            documentation: '',
           },
           buffer_size: {
             required: false,
             value: '',
+            details: '',
+            documentation: '',
           },
           ws: {
             required: false,
             value: false,
+            details: '',
+            documentation: '',
           },
           request_buffering: {
             required: false,
             value: 'on',
+            details: '',
+            documentation: '',
           },
           buffering: {
             required: false,
             value: 'on',
+            details: '',
+            documentation: '',
           },
           http_version: {
             required: false,
             value: '1.0',
+            details: '',
+            documentation: '',
           },
           client_max_body_size: {
             required: false,
             value: '1m',
+            details: '',
+            documentation: '',
           },
           headers: {
             required: false,
             value: {},
+            details: '',
+            documentation: '',
           },
           static: {
             required: false,
@@ -248,46 +305,70 @@ export const CONFIG_DEFAULT = {
               location: {
                 required: true,
                 value: '',
+                details: '',
+                documentation: '',
               },
               path: {
                 required: true,
                 value: '',
+                details: '',
+                documentation: '',
               },
               index: {
                 required: false,
                 value: '',
+                details: '',
+                documentation: '',
               },
             }),
+            details: '',
+            documentation: '',
           },
         }),
+        details: '',
+        documentation: '',
       },
       environment: {
         required: false,
         value: [],
+        details: '',
+        documentation: '',
       },
       pwd: {
         required: false,
         value: '',
+        details: '',
+        documentation: '',
       },
       exclude: {
         required: false,
         value: [],
+        details: '',
+        documentation: '',
       },
       depends_on: {
         required: false,
         value: [],
+        details: '',
+        documentation: '',
       },
       domains: {
         required: false,
         value: {},
+        details: '',
+        documentation: '',
       },
       command: {
         required: false,
         value: '',
+        details: '',
+        documentation: '',
       },
       volumes: {
         required: false,
         value: [],
+        details: '',
+        documentation: '',
       },
     }),
   },

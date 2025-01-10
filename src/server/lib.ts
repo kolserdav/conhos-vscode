@@ -3,6 +3,8 @@ import { CompletionItemKind, CompletionItem } from 'vscode-languageserver/node';
 interface Config {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any;
+  detail: string;
+  documentation: string;
 }
 
 export function createCompletionItems(
@@ -11,10 +13,16 @@ export function createCompletionItems(
   parent = ''
 ): CompletionItem[] {
   let res: CompletionItem[] = [];
-
+  if (!config) {
+    console.warn('Config is missing in createCompletionItems', config);
+    return res;
+  }
   Object.keys(config).forEach((label) => {
     const item = config[label as keyof typeof config];
-    const { value } = item;
+    if (!item) {
+      return;
+    }
+    const { value, detail, documentation } = item;
     res.push({
       label,
       kind:
@@ -29,6 +37,8 @@ export function createCompletionItems(
                 : typeof value === 'object'
                   ? CompletionItemKind.Struct
                   : CompletionItemKind.Text,
+      detail,
+      documentation,
       data: {
         level,
         parent,
